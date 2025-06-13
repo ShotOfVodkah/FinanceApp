@@ -1,0 +1,66 @@
+//
+//  MockServices.swift
+//  FinanceApp
+//
+//  Created by Stepan Polyakov on 09.06.2025.
+//
+
+import Foundation
+
+final class CategoriesService {
+    private let categories: [Category] = [
+        Category(id: 1, name: "Shopping", emoji: "🛒", direction: .outcome),
+        Category(id: 2, name: "Salary", emoji: "💵", direction: .income),
+        Category(id: 3, name: "Medical", emoji: "🚑", direction: .outcome),
+        Category(id: 4, name: "Twirling and swirling", emoji: "👠", direction: .income)
+    ]
+    
+    func getAll() async -> [Category] {
+        return categories
+    }
+    
+    func getSpecific(dir: Direction) async -> [Category] {
+        return categories.filter {$0.direction == dir}
+    }
+}
+
+final class  BankAccountsService {
+    private var account: BankAccount = BankAccount(id: 1, userID: 1, name: "My account", balance: 100000.00, currency: "RUB", createdAt: Date(), updatedAt: Date())
+    
+    func getAccount() async -> BankAccount {
+        return account
+    }
+    
+    func changeBalance(amount: Decimal, add: Bool) async {
+        if add {
+            account.balance += amount
+        } else {
+            account.balance -= amount
+        }
+    }
+}
+
+final class  TransactionsService {
+    private var transactions: [Transaction] = []
+    
+    func getTransactions(from: Date, to: Date) async -> [Transaction] {
+        return transactions.filter { $0.transactionDate >= from && $0.transactionDate <= to}
+    }
+    
+    func addTransaction(transaction: Transaction) async {
+        transactions.append(transaction)
+    }
+    
+    func editTransaction(id: Int, category: Category? = nil, amount: Decimal? = nil, transactionDate: Date? = nil) async {
+        guard let idx = transactions.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+        if let category {transactions[idx].category = category}
+        if let amount {transactions[idx].amount = amount}
+        if let transactionDate {transactions[idx].transactionDate = transactionDate}
+    }
+    
+    func deleteTransaction(id: Int) async {
+        transactions.removeAll {$0.id == id}
+    }
+}
