@@ -32,4 +32,23 @@ final class ParseTests: XCTestCase {
         let res = Transaction.parse(jsonObject: invalid)
         XCTAssertNil(res)
     }
+    
+    func parseValidFile() throws {
+        guard let url = Bundle(for: type(of: self)).url(forResource: "transaction", withExtension: "json") else {
+            XCTFail("JSON not found")
+            return
+        }
+        let data = try Data(contentsOf: url)
+        let jsonObject = try JSONSerialization.jsonObject(with: data, options: [])
+        guard let res = Transaction.parse(jsonObject: jsonObject) else {
+            XCTFail("Parse fail")
+            return
+        }
+        XCTAssertEqual(res.id, 1)
+        XCTAssertEqual(res.account.id, 1)
+        XCTAssertEqual(res.category.name, "Зарплата")
+        XCTAssertEqual(res.amount, Decimal(string: "500.00"))
+        XCTAssertEqual(res.comment, "Зарплата за месяц")
+        
+    }
 }
