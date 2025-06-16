@@ -41,7 +41,12 @@ final class  BankAccountsService {
 }
 
 final class  TransactionsService {
-    private var transactions: [Transaction] = []
+    private var transactions: [Transaction] = [
+        Transaction(id: 1, account: 1, category: 1, amount: 200.00, transactionDate: Date(), comment: "a", createdAt: Date(), updatedAt: Date()),
+        Transaction(id: 2, account: 1, category: 2, amount: 300.00, transactionDate: Date(), comment: "b", createdAt: Date(), updatedAt: Date()),
+        Transaction(id: 3, account: 1, category: 3, amount: 400.00, transactionDate: Date(), comment: "c", createdAt: Date(), updatedAt: Date()),
+        Transaction(id: 4, account: 1, category: 4, amount: 600.00, transactionDate: Date(), comment: "d", createdAt: Date(), updatedAt: Date()),
+    ]
     
     func getTransactions(from: Date, to: Date) async -> [Transaction] {
         return transactions.filter { $0.transactionDate >= from && $0.transactionDate <= to}
