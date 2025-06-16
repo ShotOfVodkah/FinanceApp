@@ -51,11 +51,11 @@ final class  TransactionsService {
         transactions.append(transaction)
     }
     
-    func editTransaction(id: Int, category: Category? = nil, amount: Decimal? = nil, transactionDate: Date? = nil) async {
+    func editTransaction(id: Int, category: Int? = nil, amount: Decimal? = nil, transactionDate: Date? = nil) async {
         guard let idx = transactions.firstIndex(where: { $0.id == id }) else {
             return
         }
-        if let category {transactions[idx].category = category}
+        if let category {transactions[idx].categoryId = category}
         if let amount {transactions[idx].amount = amount}
         if let transactionDate {transactions[idx].transactionDate = transactionDate}
     }
