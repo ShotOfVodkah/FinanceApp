@@ -86,13 +86,11 @@ struct HistoryView: View {
         .task {
             await viewModel.load()
         }
-        .onChange(of: viewModel.from) { newValue in
-            viewModel.from = Calendar.current.startOfDay(for: newValue)
-            Task { await viewModel.load() }
+        .onChange(of: viewModel.from) { _ in
+            Task { await viewModel.check_date(flag: false) }
         }
-        .onChange(of: viewModel.to) { newValue in
-            viewModel.to = Calendar.current.date(bySettingHour: 23, minute: 59, second: 59, of: newValue)!
-            Task { await viewModel.load() }
+        .onChange(of: viewModel.to) { _ in
+            Task { await viewModel.check_date(flag: true) }
         }
 
     }
