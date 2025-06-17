@@ -1,40 +1,36 @@
 //
-//  IncomeViewModel.swift
+//  HistoryViewModel.swift
 //  Finance
 //
-//  Created by Stepan Polyakov on 16.06.2025.
+//  Created by Stepan Polyakov on 17.06.2025.
 //
 
 import Foundation
 
 @MainActor
-final class IncomeViewModel: ObservableObject {
+final class HistoryViewModel: ObservableObject {
     @Published var items: [(Transaction, Category)] = []
     @Published var total: Decimal = 0
-    var directionText: String {
-        switch direction {
-        case .income: return "Доходы сегодня"
-        case .outcome: return "Расходы сегодня"
-        }
-    }
+    @Published var from: Date
+    @Published var to: Date
     
-    let transactionService: TransactionsService
-    let categoriesService: CategoriesService
-    let direction: Direction
+    private let transactionService: TransactionsService
+    private let categoriesService: CategoriesService
+    private let direction: Direction
     
     init(transactionService: TransactionsService, categoriesService: CategoriesService, direction: Direction) {
         self.categoriesService = categoriesService
         self.transactionService = transactionService
         self.direction = direction
+        self.to = Calendar.current.date(bySettingHour: 23, minute: 59, second: 0, of: Date())!
+        self.from = Calendar.current.startOfDay(for: Calendar.current.date(byAdding: .month, value: -1, to: Date())!)
     }
     
     func load() async {
         items = []
         total = 0
-        let start = Calendar.current.startOfDay(for: Date())
-        let end = Calendar.current.date(byAdding: .day, value: 1, to: start)!
         
-        let transactions = await transactionService.getTransactions(from: start, to: end)
+        let transactions = await transactionService.getTransactions(from: from, to: to)
         let categories = await categoriesService.getSpecific(dir: direction)
         
         for transaction in transactions {
