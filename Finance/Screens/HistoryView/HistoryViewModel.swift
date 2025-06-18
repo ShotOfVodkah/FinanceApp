@@ -53,4 +53,21 @@ final class HistoryViewModel: ObservableObject {
         self.to = Calendar.current.date(bySettingHour: 23, minute: 59, second: 0, of: to_tmp)!
         Task {await load()}
     }
+    
+    @Published var selectedSope: FilterType = .date
+    
+    enum FilterType: String, CaseIterable {
+        case date = "Дата"
+        case amount = "Сумма"
+    }
+    
+    var filteredItems: [(Transaction, Category)] {
+        switch selectedSope {
+        case .date:
+            return items.sorted(by: { $0.0.transactionDate > $1.0.transactionDate })
+        case .amount:
+            return items.sorted(by: { $0.0.amount > $1.0.amount })
+        }
+    }
+    
 }

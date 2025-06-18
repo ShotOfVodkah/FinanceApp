@@ -40,35 +40,13 @@ struct HistoryView: View {
                 .font(.title)
                 .bold()
             
-            VStack {
-                HStack {
-                    DatePicker("Начало", selection: $viewModel.from, in: ...Date(), displayedComponents: .date)
-                }
-                
-                Divider()
-                
-                HStack {
-                    DatePicker("Конец", selection: $viewModel.to, in: ...Date(), displayedComponents: .date)
-                }
-                
-                Divider()
-                
-                HStack {
-                    Text("Cумма")
-                    Spacer()
-                    Text("\(viewModel.total) ₽")
-                }
-                .padding(.vertical, 5)
-            }
-            .padding()
-            .background(Color.white)
-            .clipShape(RoundedRectangle(cornerRadius: 15))
+            pickers
             
             Text("ОПЕРАЦИИ")
                 .foregroundStyle(Color.gray)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 8) {
-                    ForEach(viewModel.items, id: \.0.id) { transaction, category in
+                    ForEach(viewModel.filteredItems, id: \.0.id) { transaction, category in
                         TransactionRow(transaction: transaction, category: category)
                             .padding(.vertical, 10)
                     }
@@ -93,5 +71,45 @@ struct HistoryView: View {
             Task { await viewModel.check_date(flag: true) }
         }
 
+    }
+    
+    private var pickers: some View {
+        VStack {
+            HStack {
+                DatePicker("Начало", selection: $viewModel.from, in: ...Date(), displayedComponents: .date)
+            }
+            
+            Divider()
+            
+            HStack {
+                DatePicker("Конец", selection: $viewModel.to, in: ...Date(), displayedComponents: .date)
+            }
+            
+            Divider()
+            
+            HStack {
+                Text("Сортировка")
+                Spacer()
+                Picker("", selection: $viewModel.selectedSope) {
+                    ForEach(HistoryViewModel.FilterType.allCases, id: \.self) { filter in
+                        Text(filter.rawValue).tag(filter)
+                    }
+                }
+                .pickerStyle(DefaultPickerStyle())
+            }
+            .padding(.vertical, 1)
+            
+            Divider()
+            
+            HStack {
+                Text("Cумма")
+                Spacer()
+                Text("\(viewModel.total) ₽")
+            }
+            .padding(.vertical, 5)
+        }
+        .padding()
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 15))
     }
 }
