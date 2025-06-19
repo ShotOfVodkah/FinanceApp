@@ -27,7 +27,11 @@ struct IncomeView: View {
                 
                 Section(header: Text("ОПЕРАЦИИ")) {
                     ForEach(viewModel.items, id: \.0.id) { transaction, category in
-                        TransactionRow(transaction: transaction, category: category)
+                        NavigationLink {
+                            
+                        } label: {
+                            TransactionRow(transaction: transaction, category: category)
+                        }
                     }
                 }
             }
@@ -69,8 +73,6 @@ struct TransactionRow: View {
             Spacer()
             
             Text("\(transaction.amount) ₽")
-            Image(systemName: "chevron.right")
-                .foregroundStyle(Color.gray)
         }
     }
 }

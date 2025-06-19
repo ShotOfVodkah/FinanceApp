@@ -43,7 +43,11 @@ struct HistoryView: View {
             
             Section(header: Text("ОПЕРАЦИИ")) {
                 ForEach(viewModel.filteredItems, id: \.0.id) { transaction, category in
-                    TransactionRow(transaction: transaction, category: category)
+                    NavigationLink {
+                        
+                    } label: {
+                        TransactionRow(transaction: transaction, category: category)
+                    }
                 }
             }
         }

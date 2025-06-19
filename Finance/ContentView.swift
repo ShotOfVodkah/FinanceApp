@@ -21,27 +21,37 @@ struct ContentView: View {
         TabView(selection: $selectedTab) {
             IncomeView(transactionsService: transactionsService, categoriesService: categoriesService, direction: .outcome)
                 .tabItem{
-                    Label("Расходы", systemImage: "cart.fill.badge.minus")
+                    Text("Расходы")
+                    Image("icon_outcome")
+                        .renderingMode(.template)
                 }
                 .tag(0)
             IncomeView(transactionsService: transactionsService, categoriesService: categoriesService, direction: .income)
                 .tabItem{
-                    Label("Доходы", systemImage: "cart.fill.badge.plus")
+                    Text("Доходы")
+                    Image("icon_income")
+                        .renderingMode(.template)
                 }
                 .tag(1)
             Text("Счет")
                 .tabItem{
-                    Label("Счет", systemImage: "creditcard.fill")
+                    Text("Счет")
+                    Image("icon_account")
+                        .renderingMode(.template)
                 }
                 .tag(2)
             Text("Статьи")
                 .tabItem{
-                    Label("Статьи", systemImage: "text.line.first.and.arrowtriangle.forward")
+                    Text("Статьи")
+                    Image("icon_category")
+                        .renderingMode(.template)
                 }
                 .tag(3)
             Text("Настройки")
                 .tabItem{
-                    Label("Настройки", systemImage: "gearshape.fill")
+                    Text("Настройки")
+                    Image("icon_settings")
+                        .renderingMode(.template)
                 }
                 .tag(4)
         }
