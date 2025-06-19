@@ -16,9 +16,24 @@ struct IncomeView: View {
     
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Spacer()
+            List {
+                Section {
+                    HStack {
+                        Text("Bcего")
+                        Spacer()
+                        Text("\(viewModel.total) ₽")
+                    }
+                }
+                
+                Section(header: Text("ОПЕРАЦИИ")) {
+                    ForEach(viewModel.items, id: \.0.id) { transaction, category in
+                        TransactionRow(transaction: transaction, category: category)
+                    }
+                }
+            }
+            .navigationTitle(viewModel.directionText)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
                     NavigationLink {
                         HistoryView(
                             transactionsService: viewModel.transactionService,
@@ -27,41 +42,10 @@ struct IncomeView: View {
                         )
                     } label: {
                         Image(systemName: "clock")
-                            .foregroundStyle(.gray)
-                            .imageScale(.large)
                     }
-                }
-                
-                Text(viewModel.directionText)
-                    .font(.title)
-                    .bold()
-                
-                HStack {
-                    Text("Bcего")
-                    Spacer()
-                    Text("\(viewModel.total) ₽")
-                }
-                .padding()
-                .background(Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: 15))
-                
-                Text("ОПЕРАЦИИ")
-                    .foregroundStyle(Color.gray)
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 8) {
-                        ForEach(viewModel.items, id: \.0.id) { transaction, category in
-                            TransactionRow(transaction: transaction, category: category)
-                                .padding(.vertical, 10)
-                        }
-                    }
-                    .padding()
-                    .background(Color.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 15))
                 }
             }
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(.systemGray6))
+            .listStyle(.insetGrouped)
             .task {
                 await viewModel.load()
             }

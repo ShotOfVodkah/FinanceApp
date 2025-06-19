@@ -17,99 +17,65 @@ struct HistoryView: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading) {
-            HStack {
-                Button(action: {dismiss()}) {
-                    HStack {
-                        Image(systemName: "chevron.left")
-                        Text("Назад")
+        List {
+            Section {
+                DatePicker("Начало", selection: $viewModel.from, in: ...Date(), displayedComponents: .date)
+                
+                DatePicker("Конец", selection: $viewModel.to, in: ...Date(), displayedComponents: .date)
+                
+                HStack {
+                    Text("Сортировка")
+                    Spacer()
+                    Picker("", selection: $viewModel.selectedSope) {
+                        ForEach(HistoryViewModel.FilterType.allCases, id: \.self) { filter in
+                            Text(filter.rawValue).tag(filter)
+                        }
                     }
-                    .foregroundStyle(Color.gray)
+                    .pickerStyle(DefaultPickerStyle())
                 }
-                Spacer()
-                Button {
-                    
-                } label: {
-                    Image(systemName: "document")
-                        .foregroundStyle(Color.gray)
+                
+                HStack {
+                    Text("Cумма")
+                    Spacer()
+                    Text("\(viewModel.total) ₽")
                 }
             }
-            .padding()
             
-            Text("Моя история")
-                .font(.title)
-                .bold()
-            
-            pickers
-            
-            Text("ОПЕРАЦИИ")
-                .foregroundStyle(Color.gray)
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 8) {
-                    ForEach(viewModel.filteredItems, id: \.0.id) { transaction, category in
-                        TransactionRow(transaction: transaction, category: category)
-                            .padding(.vertical, 10)
-                    }
+            Section(header: Text("ОПЕРАЦИИ")) {
+                ForEach(viewModel.filteredItems, id: \.0.id) { transaction, category in
+                    TransactionRow(transaction: transaction, category: category)
                 }
-                .padding()
-                .background(Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: 15))
             }
-            Spacer()
         }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemGray6))
+        .navigationTitle("Моя история")
         .navigationBarBackButtonHidden(true)
+        .listStyle(.insetGrouped)
         .task {
             await viewModel.load()
         }
+        .background(Color(.systemGray6))
         .onChange(of: viewModel.from) { _ in
             Task { await viewModel.check_date(flag: false) }
         }
         .onChange(of: viewModel.to) { _ in
             Task { await viewModel.check_date(flag: true) }
         }
-
-    }
-    
-    private var pickers: some View {
-        VStack {
-            HStack {
-                DatePicker("Начало", selection: $viewModel.from, in: ...Date(), displayedComponents: .date)
-            }
-            
-            Divider()
-            
-            HStack {
-                DatePicker("Конец", selection: $viewModel.to, in: ...Date(), displayedComponents: .date)
-            }
-            
-            Divider()
-            
-            HStack {
-                Text("Сортировка")
-                Spacer()
-                Picker("", selection: $viewModel.selectedSope) {
-                    ForEach(HistoryViewModel.FilterType.allCases, id: \.self) { filter in
-                        Text(filter.rawValue).tag(filter)
-                    }
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(action: { dismiss() }) {
+                    Label("Назад", systemImage: "chevron.left")
+                        .labelStyle(.titleAndIcon)
+                        .foregroundStyle(.gray)
                 }
-                .pickerStyle(DefaultPickerStyle())
             }
-            .padding(.vertical, 1)
-            
-            Divider()
-            
-            HStack {
-                Text("Cумма")
-                Spacer()
-                Text("\(viewModel.total) ₽")
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: {
+                    
+                }) {
+                    Image(systemName: "document")
+                        .foregroundStyle(.gray)
+                }
             }
-            .padding(.vertical, 5)
         }
-        .padding()
-        .background(Color.white)
-        .clipShape(RoundedRectangle(cornerRadius: 15))
     }
 }
