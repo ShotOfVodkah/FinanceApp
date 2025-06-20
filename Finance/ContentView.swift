@@ -19,14 +19,14 @@ struct ContentView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            IncomeView(transactionsService: transactionsService, categoriesService: categoriesService, direction: .outcome)
+            TransactionsListView(transactionsService: transactionsService, categoriesService: categoriesService, direction: .outcome)
                 .tabItem{
                     Text("Расходы")
                     Image("icon_outcome")
                         .renderingMode(.template)
                 }
                 .tag(0)
-            IncomeView(transactionsService: transactionsService, categoriesService: categoriesService, direction: .income)
+            TransactionsListView(transactionsService: transactionsService, categoriesService: categoriesService, direction: .income)
                 .tabItem{
                     Text("Доходы")
                     Image("icon_income")

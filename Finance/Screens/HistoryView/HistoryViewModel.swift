@@ -41,19 +41,19 @@ final class HistoryViewModel: ObservableObject {
         }
     }
     
-    func check_date(flag: Bool) async {
-        var from_tmp = Calendar.current.startOfDay(for: from)
-        var to_tmp = Calendar.current.startOfDay(for: to)
+    func check_date(to_changed: Bool) async {
+        var from_date = Calendar.current.startOfDay(for: from)
+        var to_date = Calendar.current.startOfDay(for: to)
         
-        guard (flag && from_tmp > to_tmp) || (!flag && to_tmp < from_tmp) else { return }
+        guard (to_changed && from_date > to_date) || (!to_changed && to_date < from_date) else { return }
         
-        if from_tmp > to_tmp && flag {
-            from_tmp = to_tmp
-        } else if to_tmp < from_tmp {
-            to_tmp = from_tmp
+        if from_date > to_date && to_changed {
+            from_date = to_date
+        } else if to_date < from_date {
+            to_date = from_date
         }
-        self.from = from_tmp
-        self.to = Calendar.current.date(bySettingHour: 23, minute: 59, second: 0, of: to_tmp)!
+        self.from = from_date
+        self.to = Calendar.current.date(bySettingHour: 23, minute: 59, second: 0, of: to_date)!
         await load()
     }
     

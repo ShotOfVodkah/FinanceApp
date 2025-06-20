@@ -8,7 +8,7 @@
 import Foundation
 
 @MainActor
-final class IncomeViewModel: ObservableObject {
+final class TransactionsListViewModel: ObservableObject {
     @Published var items: [(Transaction, Category)] = []
     @Published var total: Decimal = 0
     var directionText: String {

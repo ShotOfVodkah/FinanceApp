@@ -7,11 +7,11 @@
 
 import SwiftUI
 
-struct IncomeView: View {
-    @StateObject private var viewModel: IncomeViewModel
+struct TransactionsListView: View {
+    @StateObject private var viewModel: TransactionsListViewModel
     
     init(transactionsService: TransactionsService, categoriesService: CategoriesService, direction: Direction) {
-        _viewModel = StateObject(wrappedValue: IncomeViewModel(transactionService: transactionsService, categoriesService: categoriesService, direction: direction))
+        _viewModel = StateObject(wrappedValue: TransactionsListViewModel(transactionService: transactionsService, categoriesService: categoriesService, direction: direction))
     }
     
     var body: some View {

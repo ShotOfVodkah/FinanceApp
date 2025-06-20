@@ -59,10 +59,10 @@ struct HistoryView: View {
         }
         .background(Color(.systemGray6))
         .onChange(of: viewModel.from) { _ in
-            Task { await viewModel.check_date(flag: false) }
+            Task { await viewModel.check_date(to_changed: false) }
         }
         .onChange(of: viewModel.to) { _ in
-            Task { await viewModel.check_date(flag: true) }
+            Task { await viewModel.check_date(to_changed: true) }
         }
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
