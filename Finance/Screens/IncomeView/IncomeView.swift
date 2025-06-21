@@ -1,0 +1,79 @@
+//
+//  IncomeView.swift
+//  Finance
+//
+//  Created by Stepan Polyakov on 16.06.2025.
+//
+
+import SwiftUI
+
+struct TransactionsListView: View {
+    @StateObject private var viewModel: TransactionsListViewModel
+    
+    init(transactionsService: TransactionsService, categoriesService: CategoriesService, direction: Direction) {
+        _viewModel = StateObject(wrappedValue: TransactionsListViewModel(transactionService: transactionsService, categoriesService: categoriesService, direction: direction))
+    }
+    
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    HStack {
+                        Text("Bcего")
+                        Spacer()
+                        Text("\(viewModel.total) ₽")
+                    }
+                }
+                
+                Section(header: Text("ОПЕРАЦИИ")) {
+                    ForEach(viewModel.items, id: \.0.id) { transaction, category in
+                        NavigationLink {
+                            
+                        } label: {
+                            TransactionRow(transaction: transaction, category: category)
+                        }
+                    }
+                }
+            }
+            .navigationTitle(viewModel.directionText)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    NavigationLink {
+                        HistoryView(
+                            transactionsService: viewModel.transactionService,
+                            categoriesService: viewModel.categoriesService,
+                            direction: viewModel.direction
+                        )
+                    } label: {
+                        Image(systemName: "clock")
+                    }
+                }
+            }
+            .listStyle(.insetGrouped)
+            .task {
+                await viewModel.load()
+            }
+        }
+    }
+}
+
+struct TransactionRow: View {
+    let transaction: Transaction
+    let category: Category
+    
+    var body: some View {
+        HStack {
+            Text("\(category.emoji)")
+                .padding(5)
+                .background(Color.accentColor.opacity(0.2))
+                .clipShape(Circle())
+            
+            Text(category.name)
+            
+            Spacer()
+            
+            Text("\(transaction.amount) ₽")
+        }
+    }
+}
+

@@ -41,7 +41,15 @@ final class  BankAccountsService {
 }
 
 final class  TransactionsService {
-    private var transactions: [Transaction] = []
+    private var transactions: [Transaction] = [
+        Transaction(id: 1, account: 1, category: 1, amount: 200.00, transactionDate: Calendar.current.date(from: DateComponents(year: 2025, month: 6, day: 1))!, comment: "a", createdAt: Date(), updatedAt: Date()),
+        Transaction(id: 2, account: 1, category: 2, amount: 400.00, transactionDate: Calendar.current.date(from: DateComponents(year: 2025, month: 6, day: 1))!, comment: "b", createdAt: Date(), updatedAt: Date()),
+        Transaction(id: 3, account: 1, category: 3, amount: 400.00, transactionDate: Calendar.current.date(from: DateComponents(year: 2025, month: 6, day: 1))!, comment: "c", createdAt: Date(), updatedAt: Date()),
+        Transaction(id: 4, account: 1, category: 4, amount: 300.00, transactionDate: Calendar.current.date(from: DateComponents(year: 2025, month: 6, day: 2))!, comment: "d", createdAt: Date(), updatedAt: Date()),
+        Transaction(id: 5, account: 1, category: 4, amount: 500.00, transactionDate: Calendar.current.date(from: DateComponents(year: 2025, month: 6, day: 3))!, comment: "d", createdAt: Date(), updatedAt: Date()),
+        Transaction(id: 6, account: 1, category: 3, amount: 400.00, transactionDate: Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: Date())!, comment: "c", createdAt: Date(), updatedAt: Date()),
+        Transaction(id: 7, account: 1, category: 4, amount: 300.00, transactionDate: Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: Date())!, comment: "d", createdAt: Date(), updatedAt: Date())
+    ]
     
     func getTransactions(from: Date, to: Date) async -> [Transaction] {
         return transactions.filter { $0.transactionDate >= from && $0.transactionDate <= to}
