@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct ContentView: View {
+    
     @State var selectedTab = 0
     let transactionsService = TransactionsService()
     let categoriesService = CategoriesService()
