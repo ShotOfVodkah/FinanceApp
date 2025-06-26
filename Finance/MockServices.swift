@@ -24,6 +24,7 @@ final class CategoriesService {
     }
 }
 
+
 final class  BankAccountsService {
     private var account: BankAccount = BankAccount(id: 1, userID: 1, name: "My account", balance: 100000.00, currency: "RUB", createdAt: Date(), updatedAt: Date())
     
@@ -34,9 +35,29 @@ final class  BankAccountsService {
     func changeBalance(amount: Decimal, add: Bool) async {
         if add {
             account.balance += amount
+            account.updatedAt = Date()
         } else {
             account.balance -= amount
+            account.updatedAt = Date()
         }
+    }
+    
+    func changeCurrency(newCurrencyCode: String) async {
+        guard let newCurrency = Currency(rawValue: newCurrencyCode),
+              let currentCurrency = Currency(rawValue: account.currency),
+              newCurrency != currentCurrency
+        else {
+            return
+        }
+
+        self.account.currency = newCurrency.rawValue
+        self.account.updatedAt = Date()
+    }
+
+    
+    func newBalance(amount: Decimal) async {
+        account.balance = amount
+        account.updatedAt = Date()
     }
 }
 

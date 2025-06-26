@@ -12,6 +12,7 @@ struct ContentView: View {
     @State var selectedTab = 0
     let transactionsService = TransactionsService()
     let categoriesService = CategoriesService()
+    let bankAccountService = BankAccountsService()
     
     init() {
         UITabBar.appearance().backgroundColor = UIColor.white
@@ -34,7 +35,7 @@ struct ContentView: View {
                         .renderingMode(.template)
                 }
                 .tag(1)
-            Text("Счет")
+            AccountView(bankAccountModel: bankAccountService)
                 .tabItem{
                     Text("Счет")
                     Image("icon_account")
