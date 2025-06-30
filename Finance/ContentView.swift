@@ -42,7 +42,7 @@ struct ContentView: View {
                         .renderingMode(.template)
                 }
                 .tag(2)
-            Text("Статьи")
+            CategoriesView(categoriesService: categoriesService)
                 .tabItem{
                     Text("Статьи")
                     Image("icon_category")
