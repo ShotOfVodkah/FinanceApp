@@ -5,7 +5,6 @@
 //  Created by Stepan Polyakov on 09.07.2025.
 //
 import UIKit
-
 class AnalysisTopRow: UITableViewCell {
     private let titleLabel = UILabel()
     private let valueLabel = UILabel()
@@ -35,6 +34,8 @@ class AnalysisTopRow: UITableViewCell {
         NSLayoutConstraint.activate([
             titleLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
             titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            titleLabel.topAnchor.constraint(greaterThanOrEqualTo: contentView.topAnchor, constant: 8),
+            titleLabel.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -8),
             
             valueLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
             valueLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
@@ -53,7 +54,8 @@ class AnalysisTopRow: UITableViewCell {
         
         NSLayoutConstraint.activate([
             control.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            control.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16)
+            control.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            control.heightAnchor.constraint(equalToConstant: 34)
         ])
     }
     
@@ -62,5 +64,11 @@ class AnalysisTopRow: UITableViewCell {
         valueLabel.text = value
         
         contentView.subviews.filter { $0 is UIControl }.forEach { $0.removeFromSuperview() }
+    }
+    
+    override func systemLayoutSizeFitting(_ targetSize: CGSize, withHorizontalFittingPriority horizontalFittingPriority: UILayoutPriority, verticalFittingPriority: UILayoutPriority) -> CGSize {
+        var size = super.systemLayoutSizeFitting(targetSize, withHorizontalFittingPriority: horizontalFittingPriority, verticalFittingPriority: verticalFittingPriority)
+        size.height = 46
+        return size
     }
 }

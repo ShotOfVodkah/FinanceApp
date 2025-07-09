@@ -109,10 +109,10 @@ class TransactionTableViewCell: UITableViewCell {
     }
 
 
-    func configure(with transaction: Transaction, category: Category, percentage: String) {
+    func configure(with transaction: Transaction, category: Category, percentage: String, symbol: String) {
         emojiLabel.text = String(category.emoji)
         nameLabel.text = category.name
-        amountLabel.text = "\(transaction.amount) ₽"
+        amountLabel.text = "\(transaction.amount) \(symbol)"
         percentageLabel.text = percentage
     }
 }

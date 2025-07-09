@@ -80,15 +80,22 @@ final class EditDeleteViewModel: ObservableObject {
     }
     
     func checkInput(num: String) {
-        let filtered = num.filter { "0123456789.,".contains($0) }
-        let unified = filtered.replacingOccurrences(of: ",", with: ".")
-        guard unified.components(separatedBy: ".").count <= 2 else { return }
-        let sanitized = unified.hasPrefix(".") ? "0" + unified : unified
-        if let decimalValue = Decimal(string: sanitized, locale: Locale(identifier: "en_US")) {
+        let locale = Locale.current
+        let decimalSeparator = locale.decimalSeparator ?? "."
+        let allowedCharacters = CharacterSet(charactersIn: "0123456789\(decimalSeparator)")
+        let filtered = String(num.unicodeScalars.filter { allowedCharacters.contains($0) })
+        let components = filtered.components(separatedBy: decimalSeparator)
+        guard components.count <= 2 else { return }
+        var sanitized = filtered
+        if sanitized.hasPrefix(decimalSeparator) {
+            sanitized = "0" + sanitized
+        }
+        if let decimalValue = Decimal(string: sanitized, locale: locale) {
             amountText = sanitized
             amount = decimalValue
         } else {
             amountText = ""
+            amount = nil
         }
     }
     

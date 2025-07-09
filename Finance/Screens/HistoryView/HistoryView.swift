@@ -37,7 +37,7 @@ struct HistoryView: View {
                 HStack {
                     Text("Cумма")
                     Spacer()
-                    Text("\(viewModel.total) ₽")
+                    Text("\(viewModel.total) \(viewModel.symbol)")
                 }
             }
             
@@ -77,8 +77,9 @@ struct HistoryView: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 NavigationLink {
                     AnalysisView(transactionService: viewModel.transactionService,
-                                 categoriesService: viewModel.categoriesService,
+                                 categoriesService: viewModel.categoriesService, bankAccountsService: viewModel.bankAccountService,
                                  direction: viewModel.direction)
+                        .ignoresSafeArea()
                 } label: {
                     Image(systemName: "document")
                         .foregroundStyle(.gray)

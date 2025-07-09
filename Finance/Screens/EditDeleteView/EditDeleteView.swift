@@ -66,6 +66,7 @@ struct EditDeleteView: View {
                 Task {
                     let success = await viewModel.save()
                     if success {
+                        NotificationCenter.default.post(name: .transactionDidChange, object: nil)
                         dismiss()
                     }
                 }
@@ -139,6 +140,7 @@ struct EditDeleteView: View {
         Button {
             Task {
                 await viewModel.delete()
+                NotificationCenter.default.post(name: .transactionDidChange, object: nil)
             }
             dismiss()
         } label: {

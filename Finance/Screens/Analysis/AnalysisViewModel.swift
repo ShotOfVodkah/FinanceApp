@@ -4,41 +4,59 @@
 //
 //  Created by Stepan Polyakov on 08.07.2025.
 //
-
 import Foundation
+
 final class AnalysisViewModel {
-    var items: [(Transaction, Category)] = []
-    var total: Decimal = 0
+    
+    enum SortType: String, CaseIterable {
+        case date = "Дата"
+        case amount = "Сумма"
+    }
+
+    private(set) var items: [(Transaction, Category)] = []
+    private(set) var total: Decimal = 0
+    private(set) var сurrencySymbol: String = "₽"
+
+    var sortType: SortType = .date
     var from: Date {
         didSet {
             if to < from {
-                to = Calendar.current.date(bySettingHour: 23, minute: 59, second: 0, of: from)!
+                to = Calendar.current.endOfDay(for: from)
             }
         }
     }
+
     var to: Date {
         didSet {
-            let toDateStart = Calendar.current.startOfDay(for: to)
-            to = Calendar.current.date(bySettingHour: 23, minute: 59, second: 0, of: toDateStart)!
+            to = Calendar.current.endOfDay(for: to)
             if from > to {
                 from = Calendar.current.startOfDay(for: to)
             }
         }
     }
 
-    private let transactionService: TransactionsService
-    private let categoriesService: CategoriesService
-    private let direction: Direction
-    
+    let transactionService: TransactionsService
+    let categoriesService: CategoriesService
+    let bankAccountsService: BankAccountsService
+    let direction: Direction
+
     var onDatesUpdated: (() -> Void)?
     var onDataLoaded: (() -> Void)?
 
-    init(transactionService: TransactionsService, categoriesService: CategoriesService, direction: Direction) {
+    init(
+        transactionService: TransactionsService,
+        categoriesService: CategoriesService,
+        bankAccountsService: BankAccountsService,
+        direction: Direction
+    ) {
         self.transactionService = transactionService
         self.categoriesService = categoriesService
+        self.bankAccountsService = bankAccountsService
         self.direction = direction
-        self.to = Calendar.current.date(bySettingHour: 23, minute: 59, second: 0, of: Date())!
-        self.from = Calendar.current.startOfDay(for: Calendar.current.date(byAdding: .month, value: -1, to: Date())!)
+
+        let now = Date()
+        self.to = Calendar.current.endOfDay(for: now)
+        self.from = Calendar.current.startOfDay(for: Calendar.current.date(byAdding: .month, value: -1, to: now)!)
     }
 
     func updateFromDate(_ date: Date) {
@@ -46,34 +64,53 @@ final class AnalysisViewModel {
         onDatesUpdated?()
         loadData()
     }
-    
+
     func updateToDate(_ date: Date) {
         to = date
         onDatesUpdated?()
         loadData()
     }
-    
+
+    func updateSortType(index: Int) {
+        guard index < SortType.allCases.count else { return }
+        sortType = SortType.allCases[index]
+        sortItems()
+        onDataLoaded?()
+    }
+
     func loadData() {
         Task {
-            self.items = []
-            self.total = 0
-
-            let transactions = await transactionService.getTransactions(from: from, to: to)
-            let categories = await categoriesService.getSpecific(dir: direction)
-
-            for transaction in transactions {
-                if let category = categories.first(where: { $0.id == transaction.categoryId }) {
-                    self.items.append((transaction, category))
-                    self.total += transaction.amount
+            items = []
+            
+            async let transactions = transactionService.getTransactions(from: from, to: to)
+            async let categories = categoriesService.getSpecific(dir: direction)
+            async let account = bankAccountsService.getAccount()
+                
+            let (loadedTransactions, loadedCategories, bankAccount) = await (transactions, categories, account)
+                
+            var newItems: [(Transaction, Category)] = []
+            var newTotal: Decimal = 0
+                
+            for transaction in loadedTransactions {
+                if let category = loadedCategories.first(where: { $0.id == transaction.categoryId }) {
+                    newItems.append((transaction, category))
+                    newTotal += transaction.amount
                 }
             }
 
-            DispatchQueue.main.async {
+            await MainActor.run {
+                if let currency = Currency(rawValue: bankAccount.currency) {
+                    self.сurrencySymbol = currency.symbol
+                }
+
+                self.items = newItems
+                self.total = newTotal
+                self.sortItems()
                 self.onDataLoaded?()
             }
         }
     }
-    
+
     func percentage(for transaction: Transaction) -> String {
         guard total != 0 else { return "0%" }
         let percent = (transaction.amount as NSDecimalNumber)
@@ -81,5 +118,25 @@ final class AnalysisViewModel {
             .multiplying(by: 100)
             .doubleValue
         return String(format: "%.1f%%", percent)
+    }
+
+    private func sortItems() {
+        switch sortType {
+        case .date:
+            items.sort { $0.0.transactionDate > $1.0.transactionDate }
+        case .amount:
+            items.sort { $0.0.amount > $1.0.amount }
+        }
+    }
+}
+
+
+extension Calendar {
+    func startOfDay(for date: Date) -> Date {
+        return self.date(bySettingHour: 0, minute: 0, second: 0, of: date)!
+    }
+    
+    func endOfDay(for date: Date) -> Date {
+        return self.date(bySettingHour: 23, minute: 59, second: 59, of: date)!
     }
 }
