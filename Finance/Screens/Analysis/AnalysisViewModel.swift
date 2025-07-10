@@ -21,16 +21,16 @@ final class AnalysisViewModel {
     var from: Date {
         didSet {
             if to < from {
-                to = Calendar.current.endOfDay(for: from)
+                to = Calendar.current.date(bySettingHour: 23, minute: 59, second: 59, of: from)!
             }
         }
     }
 
     var to: Date {
         didSet {
-            to = Calendar.current.endOfDay(for: to)
+            to = Calendar.current.date(bySettingHour: 23, minute: 59, second: 59, of: to)!
             if from > to {
-                from = Calendar.current.startOfDay(for: to)
+                from = Calendar.current.date(bySettingHour: 0, minute: 0, second: 0, of: to)!
             }
         }
     }
@@ -55,12 +55,13 @@ final class AnalysisViewModel {
         self.direction = direction
 
         let now = Date()
-        self.to = Calendar.current.endOfDay(for: now)
-        self.from = Calendar.current.startOfDay(for: Calendar.current.date(byAdding: .month, value: -1, to: now)!)
+        self.to = Calendar.current.date(bySettingHour: 23, minute: 59, second: 59, of: now)!
+        let oneMonthAgo = Calendar.current.date(byAdding: .month, value: -1, to: now)!
+        self.from = Calendar.current.date(bySettingHour: 0, minute: 0, second: 0, of: oneMonthAgo)!
     }
 
     func updateFromDate(_ date: Date) {
-        from = Calendar.current.startOfDay(for: date)
+        from = Calendar.current.date(bySettingHour: 0, minute: 0, second: 0, of: date)!
         onDatesUpdated?()
         loadData()
     }
@@ -127,16 +128,5 @@ final class AnalysisViewModel {
         case .amount:
             items.sort { $0.0.amount > $1.0.amount }
         }
-    }
-}
-
-
-extension Calendar {
-    func startOfDay(for date: Date) -> Date {
-        return self.date(bySettingHour: 0, minute: 0, second: 0, of: date)!
-    }
-    
-    func endOfDay(for date: Date) -> Date {
-        return self.date(bySettingHour: 23, minute: 59, second: 59, of: date)!
     }
 }
