@@ -12,8 +12,8 @@ struct HistoryView: View {
     @StateObject private var viewModel: HistoryViewModel
     @Environment(\.dismiss) var dismiss
     
-    init(transactionsService: TransactionsService, categoriesService: CategoriesService, direction: Direction) {
-        _viewModel = StateObject(wrappedValue: HistoryViewModel(transactionService: transactionsService, categoriesService: categoriesService, direction: direction))
+    init(transactionsService: TransactionsService, categoriesService: CategoriesService, direction: Direction, bankAccountService: BankAccountsService) {
+        _viewModel = StateObject(wrappedValue: HistoryViewModel(transactionService: transactionsService, categoriesService: categoriesService, direction: direction, bankAccountService: bankAccountService))
     }
     
     var body: some View {
@@ -37,17 +37,17 @@ struct HistoryView: View {
                 HStack {
                     Text("Cумма")
                     Spacer()
-                    Text("\(viewModel.total) ₽")
+                    Text("\(viewModel.total) \(viewModel.symbol)")
                 }
             }
             
             Section(header: Text("ОПЕРАЦИИ")) {
                 ForEach(viewModel.filteredItems, id: \.0.id) { transaction, category in
-                    NavigationLink {
-                        
-                    } label: {
-                        TransactionRow(transaction: transaction, category: category)
-                    }
+                    TransactionRow(transaction: transaction, category: category, symbol: viewModel.symbol)
+                        .onTapGesture {
+                            viewModel.selectedTransaction = (transaction, category)
+                            viewModel.sheet = true
+                        }
                 }
             }
         }
@@ -59,10 +59,12 @@ struct HistoryView: View {
         }
         .background(Color(.systemGray6))
         .onChange(of: viewModel.from) { _ in
-            Task { await viewModel.check_date(to_changed: false) }
+            viewModel.check_date(to_changed: false)
+            Task { await viewModel.load() }
         }
         .onChange(of: viewModel.to) { _ in
-            Task { await viewModel.check_date(to_changed: true) }
+            viewModel.check_date(to_changed: true)
+            Task { await viewModel.load() }
         }
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
@@ -73,13 +75,25 @@ struct HistoryView: View {
                 }
             }
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: {
-                    
-                }) {
+                NavigationLink {
+                    AnalysisView(transactionService: viewModel.transactionService,
+                                 categoriesService: viewModel.categoriesService, bankAccountsService: viewModel.bankAccountService,
+                                 direction: viewModel.direction)
+                        .ignoresSafeArea()
+                } label: {
                     Image(systemName: "document")
                         .foregroundStyle(.gray)
                 }
+
             }
         }
+        .fullScreenCover(isPresented: $viewModel.sheet, onDismiss: {
+            Task { await viewModel.load() }
+        }) {
+            if let selected = viewModel.selectedTransaction {
+                EditDeleteView(transactionsService: viewModel.transactionService, categoriesService: viewModel.categoriesService, direction: viewModel.direction, bankAccountService: viewModel.bankAccountService, selectedTransaction: selected)
+            }
+        }
+
     }
 }

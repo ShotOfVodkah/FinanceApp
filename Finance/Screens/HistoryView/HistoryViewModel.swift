@@ -13,17 +13,23 @@ final class HistoryViewModel: ObservableObject {
     @Published var total: Decimal = 0
     @Published var from: Date
     @Published var to: Date
+    @Published var symbol: String = ""
+    @Published var selectedTransaction: (Transaction, Category)? = nil
+    @Published var sheet = false
+
     
-    private let transactionService: TransactionsService
-    private let categoriesService: CategoriesService
-    private let direction: Direction
+    let transactionService: TransactionsService
+    let categoriesService: CategoriesService
+    let bankAccountService: BankAccountsService
+    let direction: Direction
     
-    init(transactionService: TransactionsService, categoriesService: CategoriesService, direction: Direction) {
+    init(transactionService: TransactionsService, categoriesService: CategoriesService, direction: Direction, bankAccountService: BankAccountsService) {
         self.categoriesService = categoriesService
         self.transactionService = transactionService
         self.direction = direction
         self.to = Calendar.current.date(bySettingHour: 23, minute: 59, second: 0, of: Date())!
         self.from = Calendar.current.startOfDay(for: Calendar.current.date(byAdding: .month, value: -1, to: Date())!)
+        self.bankAccountService = bankAccountService
     }
     
     func load() async {
@@ -39,9 +45,13 @@ final class HistoryViewModel: ObservableObject {
                 total += transaction.amount
             }
         }
+        
+        let account = await bankAccountService.getAccount()
+        guard let currency = Currency(rawValue: account.currency) else { return }
+        symbol = currency.symbol
     }
     
-    func check_date(to_changed: Bool) async {
+    func check_date(to_changed: Bool) {
         var from_date = Calendar.current.startOfDay(for: from)
         var to_date = Calendar.current.startOfDay(for: to)
         
@@ -54,7 +64,6 @@ final class HistoryViewModel: ObservableObject {
         }
         self.from = from_date
         self.to = Calendar.current.date(bySettingHour: 23, minute: 59, second: 0, of: to_date)!
-        await load()
     }
     
     @Published var selectedSope: FilterType = .date

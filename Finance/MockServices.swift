@@ -80,16 +80,21 @@ final class  TransactionsService {
         transactions.append(transaction)
     }
     
-    func editTransaction(id: Int, category: Int? = nil, amount: Decimal? = nil, transactionDate: Date? = nil) async {
+    func editTransaction(id: Int, category: Int? = nil, amount: Decimal? = nil, transactionDate: Date? = nil, comment: String? = nil) async {
         guard let idx = transactions.firstIndex(where: { $0.id == id }) else {
             return
         }
         if let category {transactions[idx].categoryId = category}
         if let amount {transactions[idx].amount = amount}
         if let transactionDate {transactions[idx].transactionDate = transactionDate}
+        if let comment {transactions[idx].comment = comment}
     }
     
     func deleteTransaction(id: Int) async {
         transactions.removeAll {$0.id == id}
+    }
+    
+    func getId() -> Int {
+        return transactions.count + 1
     }
 }

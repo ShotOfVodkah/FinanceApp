@@ -11,6 +11,10 @@ import Foundation
 final class TransactionsListViewModel: ObservableObject {
     @Published var items: [(Transaction, Category)] = []
     @Published var total: Decimal = 0
+    @Published var symbol: String = ""
+    @Published var selectedTransaction: (Transaction, Category)? = nil
+    @Published var sheet = false
+    
     var directionText: String {
         switch direction {
         case .income: return "Доходы сегодня"
@@ -18,14 +22,17 @@ final class TransactionsListViewModel: ObservableObject {
         }
     }
     
+    
     let transactionService: TransactionsService
     let categoriesService: CategoriesService
+    let bankAccountService: BankAccountsService
     let direction: Direction
     
-    init(transactionService: TransactionsService, categoriesService: CategoriesService, direction: Direction) {
+    init(transactionService: TransactionsService, categoriesService: CategoriesService, direction: Direction, bankAccountService: BankAccountsService) {
         self.categoriesService = categoriesService
         self.transactionService = transactionService
         self.direction = direction
+        self.bankAccountService = bankAccountService
     }
     
     func load() async {
@@ -43,5 +50,8 @@ final class TransactionsListViewModel: ObservableObject {
                 total += transaction.amount
             }
         }
+        let account = await bankAccountService.getAccount()
+        guard let currency = Currency(rawValue: account.currency) else { return }
+        symbol = currency.symbol
     }
 }

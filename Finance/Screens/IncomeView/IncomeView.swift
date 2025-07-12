@@ -10,56 +10,87 @@ import SwiftUI
 struct TransactionsListView: View {
     @StateObject private var viewModel: TransactionsListViewModel
     
-    init(transactionsService: TransactionsService, categoriesService: CategoriesService, direction: Direction) {
-        _viewModel = StateObject(wrappedValue: TransactionsListViewModel(transactionService: transactionsService, categoriesService: categoriesService, direction: direction))
+    init(transactionsService: TransactionsService, categoriesService: CategoriesService, direction: Direction, bankAccountService: BankAccountsService) {
+        _viewModel = StateObject(wrappedValue: TransactionsListViewModel(transactionService: transactionsService, categoriesService: categoriesService, direction: direction, bankAccountService: bankAccountService))
     }
     
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    HStack {
-                        Text("Bcего")
-                        Spacer()
-                        Text("\(viewModel.total) ₽")
+            ZStack {
+                List {
+                    Section {
+                        HStack {
+                            Text("Bcего")
+                            Spacer()
+                            Text("\(viewModel.total) \(viewModel.symbol)")
+                        }
                     }
-                }
-                
-                Section(header: Text("ОПЕРАЦИИ")) {
-                    ForEach(viewModel.items, id: \.0.id) { transaction, category in
-                        NavigationLink {
-                            
-                        } label: {
-                            TransactionRow(transaction: transaction, category: category)
+                    
+                    Section(header: Text("ОПЕРАЦИИ")) {
+                        ForEach(viewModel.items, id: \.0.id) { transaction, category in
+                            TransactionRow(transaction: transaction, category: category, symbol: viewModel.symbol)
+                                .onTapGesture {
+                                    viewModel.selectedTransaction = (transaction, category)
+                                    viewModel.sheet = true
+                                }
                         }
                     }
                 }
+                .navigationTitle(viewModel.directionText)
+                .listStyle(.insetGrouped)
+                .task {
+                    await viewModel.load()
+                }
+                
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Button(action: {
+                            viewModel.sheet = true
+                            viewModel.selectedTransaction = nil
+                        }) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 24, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 56, height: 56)
+                                .background(Color.accentColor)
+                                .clipShape(Circle())
+                        }
+                        .padding(.trailing, 16)
+                        .padding(.bottom, 16)
+                    }
+                }
             }
-            .navigationTitle(viewModel.directionText)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     NavigationLink {
                         HistoryView(
                             transactionsService: viewModel.transactionService,
                             categoriesService: viewModel.categoriesService,
-                            direction: viewModel.direction
+                            direction: viewModel.direction,
+                            bankAccountService: viewModel.bankAccountService
                         )
                     } label: {
                         Image(systemName: "clock")
                     }
                 }
             }
-            .listStyle(.insetGrouped)
-            .task {
-                await viewModel.load()
+            .fullScreenCover(isPresented: $viewModel.sheet, onDismiss: {
+                Task { await viewModel.load() }
+            }) {
+                EditDeleteView(transactionsService: viewModel.transactionService, categoriesService: viewModel.categoriesService, direction: viewModel.direction, bankAccountService: viewModel.bankAccountService, selectedTransaction: viewModel.selectedTransaction)
             }
         }
     }
 }
 
+
+
 struct TransactionRow: View {
     let transaction: Transaction
     let category: Category
+    let symbol: String
     
     var body: some View {
         HStack {
@@ -72,7 +103,9 @@ struct TransactionRow: View {
             
             Spacer()
             
-            Text("\(transaction.amount) ₽")
+            Text("\(transaction.amount) \(symbol)")
+            Image(systemName: "chevron.right")
+                .foregroundStyle(.gray)
         }
     }
 }
