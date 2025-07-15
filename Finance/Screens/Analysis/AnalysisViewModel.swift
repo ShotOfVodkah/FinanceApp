@@ -6,42 +6,30 @@
 //
 import Foundation
 
-final class AnalysisViewModel {
+@MainActor
+final class AnalysisViewModel: ObservableObject {
     
     enum SortType: String, CaseIterable {
         case date = "Дата"
         case amount = "Сумма"
     }
+    
+    var onDatesUpdated: (() -> Void)?
+    var onDataLoaded: (() -> Void)?
 
-    private(set) var items: [(Transaction, Category)] = []
-    private(set) var total: Decimal = 0
-    private(set) var сurrencySymbol: String = "₽"
-
-    var sortType: SortType = .date
-    var from: Date {
-        didSet {
-            if to < from {
-                to = Calendar.current.date(bySettingHour: 23, minute: 59, second: 59, of: from)!
-            }
-        }
-    }
-
-    var to: Date {
-        didSet {
-            to = Calendar.current.date(bySettingHour: 23, minute: 59, second: 59, of: to)!
-            if from > to {
-                from = Calendar.current.date(bySettingHour: 0, minute: 0, second: 0, of: to)!
-            }
-        }
-    }
+    @Published private(set) var items: [(Transaction, Category)] = []
+    @Published private(set) var total: Decimal = 0
+    @Published private(set) var сurrencySymbol: String = "₽"
+    @Published var isLoading: Bool = false
+    @Published var error: String?
+    @Published var sortType: SortType = .date
+    @Published var from: Date
+    @Published var to: Date
 
     let transactionService: TransactionsService
     let categoriesService: CategoriesService
     let bankAccountsService: BankAccountsService
     let direction: Direction
-
-    var onDatesUpdated: (() -> Void)?
-    var onDataLoaded: (() -> Void)?
 
     init(
         transactionService: TransactionsService,
@@ -54,21 +42,33 @@ final class AnalysisViewModel {
         self.bankAccountsService = bankAccountsService
         self.direction = direction
 
+        var calendar = Calendar.current
+        calendar.timeZone = TimeZone.current
         let now = Date()
-        self.to = Calendar.current.date(bySettingHour: 23, minute: 59, second: 59, of: now)!
-        let oneMonthAgo = Calendar.current.date(byAdding: .month, value: -1, to: now)!
-        self.from = Calendar.current.date(bySettingHour: 0, minute: 0, second: 0, of: oneMonthAgo)!
+        self.to = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: now)!
+        let oneMonthAgo = calendar.date(byAdding: .month, value: -1, to: now)!
+        self.from = calendar.date(bySettingHour: 0, minute: 0, second: 0, of: oneMonthAgo)!
     }
 
     func updateFromDate(_ date: Date) {
-        from = Calendar.current.date(bySettingHour: 0, minute: 0, second: 0, of: date)!
-        onDatesUpdated?()
+        var calendar = Calendar.current
+        calendar.timeZone = TimeZone.current
+        let newFrom = calendar.date(bySettingHour: 0, minute: 0, second: 0, of: date)!
+        from = newFrom
+        if to < from {
+            to = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: from)!
+        }
         loadData()
     }
 
     func updateToDate(_ date: Date) {
-        to = date
-        onDatesUpdated?()
+        var calendar = Calendar.current
+        calendar.timeZone = TimeZone.current
+        let newTo = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: date)!
+        to = newTo
+        if from > to {
+            from = calendar.date(bySettingHour: 0, minute: 0, second: 0, of: to)!
+        }
         loadData()
     }
 
@@ -80,26 +80,35 @@ final class AnalysisViewModel {
     }
 
     func loadData() {
-        Task {
-            items = []
-            
-            async let transactions = transactionService.getTransactions(from: from, to: to)
-            async let categories = categoriesService.getSpecific(dir: direction)
-            async let account = bankAccountsService.getAccount()
-                
-            let (loadedTransactions, loadedCategories, bankAccount) = await (transactions, categories, account)
-                
-            var newItems: [(Transaction, Category)] = []
-            var newTotal: Decimal = 0
-                
-            for transaction in loadedTransactions {
-                if let category = loadedCategories.first(where: { $0.id == transaction.categoryId }) {
-                    newItems.append((transaction, category))
-                    newTotal += transaction.amount
-                }
-            }
+        isLoading = true
+        error = nil
+        items = []
+        total = 0
+        onDataLoaded?()
 
-            await MainActor.run {
+        Task {
+            defer {
+                isLoading = false
+                onDataLoaded?()
+            }
+            
+            do {
+                async let transactions = transactionService.getTransactions(from: from, to: to)
+                async let categories = categoriesService.getSpecific(dir: direction)
+                async let account = bankAccountsService.getAccount()
+
+                let (loadedTransactions, loadedCategories, bankAccount) = try await (transactions, categories, account)
+
+                var newItems: [(Transaction, Category)] = []
+                var newTotal: Decimal = 0
+
+                for transaction in loadedTransactions {
+                    if let category = loadedCategories.first(where: { $0.id == transaction.categoryId }) {
+                        newItems.append((transaction, category))
+                        newTotal += transaction.amount
+                    }
+                }
+
                 if let currency = Currency(rawValue: bankAccount.currency) {
                     self.сurrencySymbol = currency.symbol
                 }
@@ -107,7 +116,10 @@ final class AnalysisViewModel {
                 self.items = newItems
                 self.total = newTotal
                 self.sortItems()
-                self.onDataLoaded?()
+            } catch is CancellationError {
+                print("Вышел с экрана, задача отменилась")
+            } catch {
+                self.error = error.localizedDescription
             }
         }
     }

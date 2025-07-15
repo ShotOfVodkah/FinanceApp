@@ -8,14 +8,23 @@
 import SwiftUI
 
 struct ContentView: View {
-    
-    
     @State var selectedTab = 0
-    let transactionsService = TransactionsService()
-    let categoriesService = CategoriesService()
-    let bankAccountService = BankAccountsService()
     
+    let networkClient: NetworkClient
+    let categoriesService: CategoriesService
+    let bankAccountService: BankAccountsService
+    let transactionsService: TransactionsService
+
     init() {
+        self.networkClient = NetworkClient(
+            baseURL: "https://shmr-finance.ru/api/v1/",
+            token: "TmtbkBpyxXtgzPQCbLMvUnCD"
+        )
+
+        self.categoriesService = CategoriesService(networkClient: networkClient)
+        self.bankAccountService = BankAccountsService(networkClient: networkClient)
+        self.transactionsService = TransactionsService(networkClient: networkClient, bankAccountsService: bankAccountService)
+            
         UITabBar.appearance().backgroundColor = UIColor.white
         UITabBar.appearance().barTintColor = UIColor.white
     }
