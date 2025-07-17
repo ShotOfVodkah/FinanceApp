@@ -14,3 +14,9 @@ protocol TransactionsStorageProtocol {
     func update(transaction: Transaction) async throws
     func delete(id: Int) async throws
 }
+
+protocol CategoriesStorageProtocol {
+    func getAllCategories() async throws -> [Category]
+    func getCategories(by direction: Direction) async throws -> [Category]
+    func saveCategories(_ categories: [Category]) async throws
+}

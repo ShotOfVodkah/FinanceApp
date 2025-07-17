@@ -14,25 +14,29 @@ final class BankAccountsService {
     }
     
     func getAccount() async throws -> BankAccount {
-        let accounts: [APIAccount] = try await networkClient.request(
-            method: "GET",
-            path: "accounts",
-            responseType: [APIAccount].self
-        )
-            
-        guard let account = accounts.first else {
-            throw NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: ""])
+        do {
+            let accounts: [APIAccount] = try await networkClient.request(
+                method: "GET",
+                path: "accounts",
+                responseType: [APIAccount].self
+            )
+                
+            guard let account = accounts.first else {
+                throw NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: ""])
+            }
+                
+            return BankAccount(
+                id: account.id,
+                userID: account.userId,
+                name: account.name,
+                balance: Decimal(string: account.balance) ?? 0,
+                currency: account.currency,
+                createdAt: account.createdAt,
+                updatedAt: account.updatedAt
+            )
+        } catch {
+            throw NetworkError.noInternet
         }
-            
-        return BankAccount(
-            id: account.id,
-            userID: account.userId,
-            name: account.name,
-            balance: Decimal(string: account.balance) ?? 0,
-            currency: account.currency,
-            createdAt: account.createdAt,
-            updatedAt: account.updatedAt
-        )
     }
     
     func updateAccount(amount: Decimal, newCurrencyCode: String) async throws -> BankAccount {

@@ -26,6 +26,7 @@ struct ContentView: View {
             do {
                 return try ModelContainer(
                     for: TransactionStorage.self, BackupTransaction.self,
+                        CategoryStorage.self,
                     configurations: ModelConfiguration(isStoredInMemoryOnly: false))
             } catch {
                 fatalError("Failed to create ModelContainer: \(error)")
@@ -35,8 +36,9 @@ struct ContentView: View {
 
         let localStorage = SwiftDataTransactionStorage(container: container)
         let backupStorage = TransactionBackupStorage(container: container)
+        let categoriesStorage = SwiftDataCategoriesStorage(container: container)
         
-        self.categoriesService = CategoriesService(networkClient: networkClient)
+        self.categoriesService = CategoriesService(networkClient: networkClient, localStorage: categoriesStorage)
         self.bankAccountService = BankAccountsService(networkClient: networkClient)
         self.transactionsService = TransactionsService(networkClient: networkClient, bankAccountsService: bankAccountService, localStorage: localStorage, backupStorage: backupStorage)
             

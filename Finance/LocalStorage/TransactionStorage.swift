@@ -8,6 +8,7 @@
 import SwiftData
 import Foundation
 
+@MainActor
 final class SwiftDataTransactionStorage: TransactionsStorageProtocol {
     
     private let modelContext: ModelContext

@@ -100,13 +100,6 @@ final class EditDeleteViewModel: ObservableObject {
                     return false
                 }
                 
-                //tmp
-                print("Sending transaction with date: \(fullDate)")
-                let formatter = ISO8601DateFormatter()
-                formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                print("Formatted date: \(formatter.string(from: fullDate))")
-                //tmpEnd
-                
                 try await transactionService.addTransaction(transaction: Transaction(id: 0, account: account, category: selectedCategory.id, amount: amount, transactionDate: fullDate, comment: description, createdAt: Date(), updatedAt: Date()))
                 return true
             }

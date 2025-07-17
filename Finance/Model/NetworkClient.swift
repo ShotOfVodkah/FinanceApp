@@ -5,6 +5,7 @@
 //  Created by Stepan Polyakov on 14.07.2025.
 //
 import Foundation
+import Network
 
 enum NetworkError: Error {
     case invalidURL
@@ -58,6 +59,7 @@ final class NetworkClient {
         self.token = token
     }
 
+
     func request<T: Decodable>(
         method: String,
         path: String,
@@ -65,6 +67,16 @@ final class NetworkClient {
         body: Encodable? = nil,
         responseType: T.Type
     ) async throws -> T {
+        do {
+            let testURL = URL(string: "https://captive.apple.com")!
+            var testRequest = URLRequest(url: testURL)
+            testRequest.timeoutInterval = 1 // Таймаут 1 секунда
+                    
+            let (_, _) = try await URLSession.shared.data(for: testRequest)
+        } catch {
+            throw NetworkError.noInternet
+        }
+        
         var url = baseURL.appendingPathComponent(path)
         if let queryItems = queryItems {
             var components = URLComponents(url: url, resolvingAgainstBaseURL: false)

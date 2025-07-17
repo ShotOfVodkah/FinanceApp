@@ -56,7 +56,7 @@ final class TransactionsService {
                 queryItems: queryItems.isEmpty ? nil : queryItems,
                 responseType: [APITransactionResponse].self
             )
-                
+            
             return response.map {
                 Transaction(
                     id: $0.id,

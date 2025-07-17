@@ -43,3 +43,27 @@ final class TransactionStorage {
         )
     }
 }
+
+@Model
+final class CategoryStorage {
+    @Attribute(.unique) var id: Int
+    var name: String
+    var emoji: String
+    var isIncome: Bool
+    
+    init(from category: Category) {
+        self.id = category.id
+        self.name = category.name
+        self.emoji = String(category.emoji)
+        self.isIncome = category.direction == .income
+    }
+    
+    func toCategory() -> Category {
+        Category(
+            id: id,
+            name: name,
+            emoji: emoji.first ?? "?",
+            direction: isIncome ? .income : .outcome
+        )
+    }
+}

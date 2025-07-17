@@ -55,7 +55,7 @@ final class TransactionsListViewModel: ObservableObject {
             let end = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: Date())!
             
             async let transactionsTask = transactionService.getTransactions(from: start, to: end)
-//            async let categoriesTask = categoriesService.getSpecific(dir: direction)
+            async let categoriesTask = categoriesService.getSpecific(dir: direction)
 //            async let accountTask = bankAccountService.getAccount()
 //            
 //            let (transactions, categories, account) = try await (transactionsTask, categoriesTask, accountTask)
@@ -69,10 +69,13 @@ final class TransactionsListViewModel: ObservableObject {
 //            
 //            symbol = Currency(rawValue: account.currency)?.symbol ?? ""
             
-            let transactions = try await transactionsTask
+            let (transactions, categories) = try await (transactionsTask, categoriesTask)
+            
             for transaction in transactions {
-                items.append((transaction, Category(id: 0, name: "", emoji: "🚫", direction: .outcome)))
-                total += transaction.amount
+                if let category = categories.first(where: { $0.id == transaction.categoryId }) {
+                    items.append((transaction, category))
+                    total += transaction.amount
+                }
             }
             symbol = "offline"
         } catch is CancellationError {
