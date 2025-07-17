@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct ContentView: View {
     @State var selectedTab = 0
@@ -14,16 +15,30 @@ struct ContentView: View {
     let categoriesService: CategoriesService
     let bankAccountService: BankAccountsService
     let transactionsService: TransactionsService
+    @State private var modelContainer: ModelContainer
 
     init() {
         self.networkClient = NetworkClient(
             baseURL: "https://shmr-finance.ru/api/v1/",
             token: "TmtbkBpyxXtgzPQCbLMvUnCD"
         )
+        let container: ModelContainer = {
+            do {
+                return try ModelContainer(
+                    for: TransactionStorage.self, BackupTransaction.self,
+                    configurations: ModelConfiguration(isStoredInMemoryOnly: false))
+            } catch {
+                fatalError("Failed to create ModelContainer: \(error)")
+            }
+        }()
+        _modelContainer = State(initialValue: container)
 
+        let localStorage = SwiftDataTransactionStorage(container: container)
+        let backupStorage = TransactionBackupStorage(container: container)
+        
         self.categoriesService = CategoriesService(networkClient: networkClient)
         self.bankAccountService = BankAccountsService(networkClient: networkClient)
-        self.transactionsService = TransactionsService(networkClient: networkClient, bankAccountsService: bankAccountService)
+        self.transactionsService = TransactionsService(networkClient: networkClient, bankAccountsService: bankAccountService, localStorage: localStorage, backupStorage: backupStorage)
             
         UITabBar.appearance().backgroundColor = UIColor.white
         UITabBar.appearance().barTintColor = UIColor.white
@@ -67,6 +82,7 @@ struct ContentView: View {
                 }
                 .tag(4)
         }
+        .modelContainer(modelContainer)
     }
 }
 

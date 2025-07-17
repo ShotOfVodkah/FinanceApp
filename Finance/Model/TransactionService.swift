@@ -10,10 +10,19 @@ import Foundation
 final class TransactionsService {
     private let networkClient: NetworkClient
     private let bankAccountsService: BankAccountsService
+    private let localStorage: TransactionsStorageProtocol
+    private let backupStorage: TransactionBackupStorage
+    private let idGenerator = TemporaryIDGenerator()
     
-    init(networkClient: NetworkClient, bankAccountsService: BankAccountsService) {
+    private func generateTemporaryId() -> Int {
+        return idGenerator.generate()
+    }
+    
+    init(networkClient: NetworkClient, bankAccountsService: BankAccountsService, localStorage: TransactionsStorageProtocol, backupStorage: TransactionBackupStorage) {
         self.networkClient = networkClient
         self.bankAccountsService = bankAccountsService
+        self.localStorage = localStorage
+        self.backupStorage = backupStorage
     }
     
     private func getCurrentAccountId() async throws -> Int {
@@ -21,20 +30,26 @@ final class TransactionsService {
     }
     
     func getTransactions(from: Date? = nil, to: Date? = nil) async throws -> [Transaction] {
-        let accountId = try await getCurrentAccountId()
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
+        dateFormatter.timeZone = TimeZone(identifier: "UTC")!
             
         var queryItems = [URLQueryItem]()
-        
-        if let from = from {
-            queryItems.append(URLQueryItem(name: "startDate", value: dateFormatter.string(from: from)))
-        }
-        if let to = to {
-            queryItems.append(URLQueryItem(name: "endDate", value: dateFormatter.string(from: to)))
+            
+        if let from = from, let to = to {
+            var utcCalendar = Calendar(identifier: .gregorian)
+            utcCalendar.timeZone = TimeZone(identifier: "UTC")!
+            let utcFrom = utcCalendar.startOfDay(for: from)
+            let utcTo = utcCalendar.startOfDay(for: to.addingTimeInterval(86400))
+            queryItems.append(URLQueryItem(name: "startDate", value: dateFormatter.string(from: utcFrom)))
+            queryItems.append(URLQueryItem(name: "endDate", value: dateFormatter.string(from: utcTo)))
+            print("Запрос к серверу: \(dateFormatter.string(from: utcFrom)) - \(dateFormatter.string(from: utcTo))")
         }
             
         do {
+            let accountId = try await getCurrentAccountId()
+            
+            try await syncBackup()
             let response: [APITransactionResponse] = try await networkClient.request(
                 method: "GET",
                 path: "transactions/account/\(accountId)/period",
@@ -54,76 +69,186 @@ final class TransactionsService {
                     updatedAt: $0.parsedUpdatedAt
                 )
             }
-        } catch {
-            print("Decoding error details: \(error)")
-            throw error
+        } catch let error as NetworkError {
+            if case .noInternet = error  {
+                print("локально загружаю")
+                return try await mergedTransactions(from: from, to: to)
+            } else {
+                throw error
+            }
         }
     }
     
-    func addTransaction(transaction: Transaction) async throws -> Transaction {
-        let accountId = try await getCurrentAccountId()
-        let request = CreateTransactionRequest(
-            accountId: accountId,
-            categoryId: transaction.categoryId,
-            amount: "\(transaction.amount)",
-            transactionDate: transaction.transactionDate,
-            comment: transaction.comment ?? ""
-        )
+    private func mergedTransactions(from: Date?, to: Date?) async throws -> [Transaction] {
+        let localTransactions = try await localStorage.getTransactions(from: from, to: to)
+        
+        let backups = try backupStorage.allBackups()
+        var transactionsDict = Dictionary(uniqueKeysWithValues: localTransactions.map { ($0.id, $0) })
+        for backup in backups {
+            guard let action = backup.actionType,
+                  let transaction = backup.toTransaction() else { continue }
             
-        let response: TransactionResponse = try await networkClient.request(
-            method: "POST",
-            path: "transactions",
-            body: request,
-            responseType: TransactionResponse.self
-        )
-            
-        return Transaction(
-            id: response.id,
-            account: response.accountId,
-            category: response.categoryId,
-            amount: Decimal(string: response.amount) ?? 0,
-            transactionDate: response.transactionDate,
-            comment: response.comment ?? "",
-            createdAt: response.createdAt,
-            updatedAt: response.updatedAt
-        )
+            switch action {
+            case .create:
+                transactionsDict[transaction.id] = transaction
+            case .update:
+                if transactionsDict[transaction.id] != nil {
+                    transactionsDict[transaction.id] = transaction
+                }
+            case .delete:
+                transactionsDict.removeValue(forKey: transaction.id)
+            }
+        }
+        let mergedTransactions = Array(transactionsDict.values)
+        if let from = from, let to = to {
+            return mergedTransactions.filter {
+                $0.transactionDate >= from && $0.transactionDate <= to
+            }
+        }
+        return mergedTransactions
     }
     
-    func editTransaction(id: Int, categoryId: Int, amount: Decimal, transactionDate: Date, comment: String?) async throws -> Transaction {
-        let accountId = try await getCurrentAccountId()
-        let request = UpdateTransactionRequest(
-            accountId: accountId,
-            categoryId: categoryId,
-            amount: "\(amount)",
-            transactionDate: transactionDate,
-            comment: comment ?? ""
-        )
-        
-        let response: APITransactionResponse = try await networkClient.request(
-            method: "PUT",
-            path: "transactions/\(id)",
-            body: request,
-            responseType: APITransactionResponse.self
-        )
-        
-        return Transaction(
-            id: response.id,
-            account: response.account.id,
-            category: response.category.id,
-            amount: Decimal(string: response.amount) ?? 0,
-            transactionDate: response.parsedTransactionDate,
-            comment: response.comment ?? "",
-            createdAt: response.parsedCreatedAt,
-            updatedAt: response.parsedUpdatedAt
-        )
+    private func syncBackup() async throws{
+        let backups = try backupStorage.allBackups()
+        for backup in backups {
+                do {
+                    switch backup.actionType {
+                    case .create:
+                        let backupTransaction = backup.toTransaction()!
+                        let transaction = try await addTransaction(transaction: backupTransaction)
+                        try backupStorage.remove(id: backup.id)
+                        
+                    case .update:
+                        let backupTransaction = backup.toTransaction()!
+                        let transaction = try await editTransaction(
+                            id: backupTransaction.id,
+                            categoryId: backupTransaction.categoryId,
+                            accountId: backupTransaction.accountId,
+                            amount: backupTransaction.amount,
+                            transactionDate: backupTransaction.transactionDate,
+                            comment: backupTransaction.comment
+                        )
+                        try backupStorage.remove(id: backup.id)
+                        
+                    case .delete:
+                        let backupTransaction = backup.toTransaction()!
+                        try await deleteTransaction(id: backupTransaction.id)
+                        try backupStorage.remove(id: backup.id)
+                    case nil:
+                        continue
+                    }
+                } catch {
+                    continue
+                }
+            }
+    }
+    
+    func addTransaction(transaction: Transaction) async throws -> Transaction {
+
+        do {
+            let request = CreateTransactionRequest(
+                accountId: transaction.accountId,
+                categoryId: transaction.categoryId,
+                amount: "\(transaction.amount)",
+                transactionDate: transaction.transactionDate,
+                comment: transaction.comment ?? ""
+            )
+                
+            let response: TransactionResponse = try await networkClient.request(
+                method: "POST",
+                path: "transactions",
+                body: request,
+                responseType: TransactionResponse.self
+            )
+                
+            let transactionServer = Transaction(
+                id: response.id,
+                account: response.accountId,
+                category: response.categoryId,
+                amount: Decimal(string: response.amount) ?? 0,
+                transactionDate: response.transactionDate,
+                comment: response.comment ?? "",
+                createdAt: response.createdAt,
+                updatedAt: response.updatedAt
+            )
+            try await localStorage.create(transaction: transactionServer)
+            return transactionServer
+        } catch let error as NetworkError {
+            if case .noInternet = error  {
+                var localTransaction = transaction
+                localTransaction.id = generateTemporaryId()
+                try backupStorage.add(action: .create, transaction: localTransaction)
+                return localTransaction
+            } else {
+                throw error
+            }
+        }
+    }
+    
+    func editTransaction(id: Int, categoryId: Int, accountId: Int, amount: Decimal, transactionDate: Date, comment: String?) async throws -> Transaction {
+        do {
+            let request = UpdateTransactionRequest(
+                accountId: accountId,
+                categoryId: categoryId,
+                amount: "\(amount)",
+                transactionDate: transactionDate,
+                comment: comment ?? ""
+            )
+            
+            let response: APITransactionResponse = try await networkClient.request(
+                method: "PUT",
+                path: "transactions/\(id)",
+                body: request,
+                responseType: APITransactionResponse.self
+            )
+            
+            let transactionServer = Transaction(
+                id: response.id,
+                account: response.account.id,
+                category: response.category.id,
+                amount: Decimal(string: response.amount) ?? 0,
+                transactionDate: response.parsedTransactionDate,
+                comment: response.comment ?? "",
+                createdAt: response.parsedCreatedAt,
+                updatedAt: response.parsedUpdatedAt
+            )
+            try await localStorage.update(transaction: transactionServer)
+            return transactionServer
+        } catch let error as NetworkError {
+            if case .noInternet = error  {
+                let localTransaction = Transaction(
+                        id: id,
+                        account: try await getCurrentAccountId(),
+                        category: categoryId,
+                        amount: amount,
+                        transactionDate: transactionDate,
+                        comment: comment ?? "",
+                        createdAt: Date(),
+                        updatedAt: Date()
+                    )
+                try backupStorage.add(action: .update, transaction: localTransaction)
+                return localTransaction
+            } else {
+                throw error
+            }
+        }
     }
     
     func deleteTransaction(id: Int) async throws {
-        try await networkClient.request(
-            method: "DELETE",
-            path: "transactions/\(id)",
-            responseType: EmptyResponse.self
-        )
+        do {
+            try await networkClient.request(
+                method: "DELETE",
+                path: "transactions/\(id)",
+                responseType: EmptyResponse.self
+            )
+            try await localStorage.delete(id: id)
+        } catch let error as NetworkError {
+            if case .noInternet = error  {
+                try backupStorage.add(action: .delete, transaction: Transaction(id: id, account: 0, category: 0, amount: 0, transactionDate: Date(), comment: "", createdAt: Date(), updatedAt: Date()))
+            } else {
+                throw error
+            }
+        }
     }
 }
 
@@ -182,55 +307,6 @@ private struct TransactionResponse: Decodable {
     let comment: String?
     let createdAt: Date
     let updatedAt: Date
-    
-    enum CodingKeys: String, CodingKey {
-        case id
-        case accountId
-        case categoryId
-        case amount
-        case transactionDate
-        case comment
-        case createdAt
-        case updatedAt
-    }
-    
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(Int.self, forKey: .id)
-        accountId = try container.decode(Int.self, forKey: .accountId)
-        categoryId = try container.decode(Int.self, forKey: .categoryId)
-        amount = try container.decode(String.self, forKey: .amount)
-        
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        
-        let dateString = try container.decode(String.self, forKey: .transactionDate)
-        guard let date = dateFormatter.date(from: dateString) else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .transactionDate,
-                in: container,
-                debugDescription: "Date string does not match format expected by formatter."
-            )
-        }
-        transactionDate = date
-        
-        comment = try container.decodeIfPresent(String.self, forKey: .comment)
-        
-        let createdAtString = try container.decode(String.self, forKey: .createdAt)
-        let updatedAtString = try container.decode(String.self, forKey: .updatedAt)
-        
-        guard let createdAt = dateFormatter.date(from: createdAtString),
-              let updatedAt = dateFormatter.date(from: updatedAtString) else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .createdAt,
-                in: container,
-                debugDescription: "Date string does not match format expected by formatter."
-            )
-        }
-        
-        self.createdAt = createdAt
-        self.updatedAt = updatedAt
-    }
 }
 
 private struct CreateTransactionRequest: Encodable {
@@ -253,10 +329,11 @@ private struct CreateTransactionRequest: Encodable {
         try container.encode(accountId, forKey: .accountId)
         try container.encode(categoryId, forKey: .categoryId)
         try container.encode(amount, forKey: .amount)
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
         
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let dateString = dateFormatter.string(from: transactionDate)
+        let dateString = formatter.string(from: transactionDate)
         try container.encode(dateString, forKey: .transactionDate)
         
         try container.encode(comment, forKey: .comment)

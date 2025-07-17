@@ -54,24 +54,36 @@ final class TransactionsListViewModel: ObservableObject {
             let start = calendar.startOfDay(for: Date())
             let end = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: Date())!
             
-            print("Загрузка транзакций за период: \(start) - \(end)")
-            
             async let transactionsTask = transactionService.getTransactions(from: start, to: end)
-            async let categoriesTask = categoriesService.getSpecific(dir: direction)
-            async let accountTask = bankAccountService.getAccount()
+//            async let categoriesTask = categoriesService.getSpecific(dir: direction)
+//            async let accountTask = bankAccountService.getAccount()
+//            
+//            let (transactions, categories, account) = try await (transactionsTask, categoriesTask, accountTask)
+//            
+//            for transaction in transactions {
+//                if let category = categories.first(where: { $0.id == transaction.categoryId }) {
+//                    items.append((transaction, category))
+//                    total += transaction.amount
+//                }
+//            }
+//            
+//            symbol = Currency(rawValue: account.currency)?.symbol ?? ""
             
-            let (transactions, categories, account) = try await (transactionsTask, categoriesTask, accountTask)
-            
+            let transactions = try await transactionsTask
             for transaction in transactions {
-                if let category = categories.first(where: { $0.id == transaction.categoryId }) {
-                    items.append((transaction, category))
-                    total += transaction.amount
-                }
+                items.append((transaction, Category(id: 0, name: "", emoji: "🚫", direction: .outcome)))
+                total += transaction.amount
             }
-            
-            symbol = Currency(rawValue: account.currency)?.symbol ?? ""
+            symbol = "offline"
         } catch is CancellationError {
             print("Вышел с экрана, задача отменилась")
+        } catch let error as NetworkError {
+            switch error {
+                case .noInternet:
+                    print("интернет off")
+                default:
+                    self.error = error.localizedDescription
+            }
         } catch {
             self.error = error.localizedDescription
         }

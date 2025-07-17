@@ -4,7 +4,6 @@
 //
 //  Created by Stepan Polyakov on 14.07.2025.
 //
-
 import Foundation
 
 enum NetworkError: Error {
@@ -14,7 +13,10 @@ enum NetworkError: Error {
     case serverError(code: Int)
     case decodingError
     case encodingError
-    case unknownError
+    case noInternet
+    case hostNotFound
+    case cancelled
+    case unknown(Error)
 }
 
 extension NetworkError: LocalizedError {
@@ -26,28 +28,36 @@ extension NetworkError: LocalizedError {
             return "Некорректный ответ от сервера."
         case .unauthorized:
             return "Вы не авторизованы."
-        case .serverError(_):
-            return "Ошибка сервера."
+        case .serverError(let code):
+            return "Ошибка сервера (код \(code))."
         case .decodingError:
             return "Не удалось декодировать ответ сервера."
         case .encodingError:
             return "Не удалось закодировать данные запроса."
-        case .unknownError:
-            return "Неизвестная ошибка."
+        case .noInternet:
+            return "Отсутствует подключение к интернету."
+        case .hostNotFound:
+            return "Сервер не найден. Проверьте подключение."
+        case .cancelled:
+            return "Запрос был отменён."
+        case .unknown(let error):
+            return error.localizedDescription
         }
     }
 }
 
-
 final class NetworkClient {
     private let baseURL: URL
     private let token: String
-    
+
     init(baseURL: String, token: String) {
-        self.baseURL = URL(string: baseURL)!
+        guard let url = URL(string: baseURL) else {
+            fatalError("Invalid base URL: \(baseURL)")
+        }
+        self.baseURL = url
         self.token = token
     }
-    
+
     func request<T: Decodable>(
         method: String,
         path: String,
@@ -81,12 +91,22 @@ final class NetworkClient {
 
         let data: Data
         let response: URLResponse
+
         do {
             (data, response) = try await URLSession.shared.data(for: request)
-        } catch let error as URLError where error.code == .cancelled {
-            throw CancellationError()
+        } catch let urlError as URLError {
+            switch urlError.code {
+            case .notConnectedToInternet:
+                throw NetworkError.noInternet
+            case .cannotFindHost, .cannotConnectToHost:
+                throw NetworkError.hostNotFound
+            case .cancelled:
+                throw NetworkError.cancelled
+            default:
+                throw NetworkError.unknown(urlError)
+            }
         } catch {
-            throw error
+            throw NetworkError.unknown(error)
         }
 
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -101,9 +121,10 @@ final class NetworkClient {
         case 400..<500, 500..<600:
             throw NetworkError.serverError(code: httpResponse.statusCode)
         default:
-            throw NetworkError.unknownError
+            throw NetworkError.invalidResponse
         }
 
+        // Пустой ответ (204)
         if httpResponse.statusCode == 204 {
             if T.self == EmptyResponse.self {
                 return EmptyResponse() as! T
@@ -111,14 +132,28 @@ final class NetworkClient {
                 throw NetworkError.decodingError
             }
         }
-
         do {
             let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
+            decoder.dateDecodingStrategy = .custom { decoder in
+                let container = try decoder.singleValueContainer()
+                let dateString = try container.decode(String.self)
+                
+                let formatter = ISO8601DateFormatter()
+                formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                
+                if let date = formatter.date(from: dateString) {
+                    return date
+                }
+                
+                throw DecodingError.dataCorruptedError(
+                    in: container,
+                    debugDescription: "Invalid date format: \(dateString)"
+                )
+            }
             return try decoder.decode(T.self, from: data)
         } catch {
+            print("Decoding error details: \(error)")
             throw NetworkError.decodingError
         }
     }
-
 }

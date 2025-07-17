@@ -23,9 +23,9 @@ final class EditDeleteViewModel: ObservableObject {
     var amount: Decimal? = nil
     var prevAmount: Decimal? = nil
 
-    @Published var selectedDate: Date = Date()
-    @Published var selectedTime: Date = Date()
-    var fullDate: Date = Date()
+    @Published var selectedDate: Date 
+    @Published var selectedTime: Date
+    var fullDate: Date
 
     @Published var description: String = ""
     @Published var selectedCategory: Category? = nil
@@ -65,6 +65,10 @@ final class EditDeleteViewModel: ObservableObject {
             selectedCategory = transaction.1
             transactionId = transaction.0.id
             isEditing = true
+        } else {
+            selectedDate = Date()
+            selectedTime = Date()
+            fullDate = Date()
         }
     }
 
@@ -86,17 +90,23 @@ final class EditDeleteViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
+            let account = try await bankAccountService.getCurrentAccountId()
             if isEditing {
-                try await transactionService.editTransaction(id: transactionId ?? 0, categoryId: selectedCategory!.id, amount: amount ?? 0.00, transactionDate: fullDate, comment: description)
+                try await transactionService.editTransaction(id: transactionId ?? 0, categoryId: selectedCategory!.id, accountId: account, amount: amount ?? 0.00, transactionDate: fullDate, comment: description)
                 return true
             } else {
                 guard let amount, let selectedCategory else {
                     isShowingAlert = true
                     return false
                 }
-
-                let account = try await bankAccountService.getAccount().id
-
+                
+                //tmp
+                print("Sending transaction with date: \(fullDate)")
+                let formatter = ISO8601DateFormatter()
+                formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                print("Formatted date: \(formatter.string(from: fullDate))")
+                //tmpEnd
+                
                 try await transactionService.addTransaction(transaction: Transaction(id: 0, account: account, category: selectedCategory.id, amount: amount, transactionDate: fullDate, comment: description, createdAt: Date(), updatedAt: Date()))
                 return true
             }
@@ -143,10 +153,19 @@ final class EditDeleteViewModel: ObservableObject {
 
     func updateDate() {
         var calendar = Calendar.current
-        calendar.timeZone = TimeZone.current
-        let date = calendar.startOfDay(for: selectedDate)
-        let time = calendar.dateComponents([.hour, .minute], from: selectedTime)
-        fullDate = calendar.date(byAdding: time, to: date) ?? fullDate
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let existingNanoseconds = calendar.dateComponents([.nanosecond], from: fullDate).nanosecond
+        let dateComponents = calendar.dateComponents([.year, .month, .day], from: selectedDate)
+        let timeComponents = calendar.dateComponents([.hour, .minute, .second], from: selectedTime)
+        var mergedComponents = DateComponents()
+        mergedComponents.year = dateComponents.year
+        mergedComponents.month = dateComponents.month
+        mergedComponents.day = dateComponents.day
+        mergedComponents.hour = timeComponents.hour
+        mergedComponents.minute = timeComponents.minute
+        mergedComponents.second = timeComponents.second
+        mergedComponents.nanosecond = existingNanoseconds
+        fullDate = calendar.date(from: mergedComponents) ?? Date()
     }
 
     func updateTime() {
