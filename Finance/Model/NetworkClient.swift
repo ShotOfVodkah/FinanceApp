@@ -30,17 +30,17 @@ extension NetworkError: LocalizedError {
         case .unauthorized:
             return "Вы не авторизованы."
         case .serverError(let code):
-            return "Ошибка сервера (код \(code))."
+            return "Ошибка сервера."
         case .decodingError:
-            return "Не удалось декодировать ответ сервера."
+            return "Не удалось декодировать ответ."
         case .encodingError:
-            return "Не удалось закодировать данные запроса."
+            return "Не удалось закодировать запрос."
         case .noInternet:
             return "Отсутствует подключение к интернету."
         case .hostNotFound:
-            return "Сервер не найден. Проверьте подключение."
+            return "Проверьте стабильность вашего соединения."
         case .cancelled:
-            return "Запрос был отменён."
+            return "Запрос отменён."
         case .unknown(let error):
             return error.localizedDescription
         }
@@ -70,7 +70,7 @@ final class NetworkClient {
         do {
             let testURL = URL(string: "https://captive.apple.com")!
             var testRequest = URLRequest(url: testURL)
-            testRequest.timeoutInterval = 1 // Таймаут 1 секунда
+            testRequest.timeoutInterval = 1
                     
             let (_, _) = try await URLSession.shared.data(for: testRequest)
         } catch {
@@ -135,8 +135,6 @@ final class NetworkClient {
         default:
             throw NetworkError.invalidResponse
         }
-
-        // Пустой ответ (204)
         if httpResponse.statusCode == 204 {
             if T.self == EmptyResponse.self {
                 return EmptyResponse() as! T
@@ -164,7 +162,6 @@ final class NetworkClient {
             }
             return try decoder.decode(T.self, from: data)
         } catch {
-            print("Decoding error details: \(error)")
             throw NetworkError.decodingError
         }
     }

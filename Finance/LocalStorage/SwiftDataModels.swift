@@ -67,3 +67,36 @@ final class CategoryStorage {
         )
     }
 }
+
+@Model
+final class BankAccountStorage {
+    @Attribute(.unique) var id: Int
+    var userId: Int?
+    var name: String
+    var balance: String
+    var currency: String
+    var createdAt: Date?
+    var updatedAt: Date?
+    
+    init(from account: BankAccount) {
+        self.id = account.id
+        self.userId = account.userId
+        self.name = account.name
+        self.balance = "\(account.balance)"
+        self.currency = account.currency
+        self.createdAt = account.createdAt
+        self.updatedAt = account.updatedAt
+    }
+    
+    func toBankAccount() -> BankAccount {
+        BankAccount(
+            id: id,
+            userID: userId,
+            name: name,
+            balance: Decimal(string: balance) ?? 0,
+            currency: currency,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+    }
+}

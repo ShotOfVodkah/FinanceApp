@@ -19,7 +19,7 @@ final class TransactionBackupStorage {
         try context.fetch(FetchDescriptor<BackupTransaction>())
     }
 
-    func add(action: Action, transaction: Transaction) throws {
+    func add(action: ActionTransaction, transaction: Transaction) throws {
         let backup = BackupTransaction(action: action, transaction: transaction)
         context.insert(backup)
         try context.save()

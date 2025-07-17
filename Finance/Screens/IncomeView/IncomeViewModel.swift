@@ -54,8 +54,8 @@ final class TransactionsListViewModel: ObservableObject {
             let start = calendar.startOfDay(for: Date())
             let end = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: Date())!
             
-            async let transactionsTask = transactionService.getTransactions(from: start, to: end)
-            async let categoriesTask = categoriesService.getSpecific(dir: direction)
+//            async let transactionsTask = transactionService.getTransactions(from: start, to: end)
+//            async let categoriesTask = categoriesService.getSpecific(dir: direction)
 //            async let accountTask = bankAccountService.getAccount()
 //            
 //            let (transactions, categories, account) = try await (transactionsTask, categoriesTask, accountTask)
@@ -68,16 +68,35 @@ final class TransactionsListViewModel: ObservableObject {
 //            }
 //            
 //            symbol = Currency(rawValue: account.currency)?.symbol ?? ""
-            
-            let (transactions, categories) = try await (transactionsTask, categoriesTask)
-            
+//            
+//            let (transactions, categories) = try await (transactionsTask, categoriesTask)
+//            
+//            for transaction in transactions {
+//                if let category = categories.first(where: { $0.id == transaction.categoryId }) {
+//                    items.append((transaction, category))
+//                    total += transaction.amount
+//                }
+//            }
+//            symbol = "offline"
+            let transactions = try await transactionService.getTransactions(from: start, to: end)
+            let categories = try await categoriesService.getSpecific(dir: direction)
+            let account = try await bankAccountService.getAccount()
+                    
+            var processedItems: [(Transaction, Category)] = []
+            var processedTotal: Decimal = 0
+                    
             for transaction in transactions {
                 if let category = categories.first(where: { $0.id == transaction.categoryId }) {
-                    items.append((transaction, category))
-                    total += transaction.amount
+                    processedItems.append((transaction, category))
+                    processedTotal += transaction.amount
                 }
             }
-            symbol = "offline"
+                    
+            await MainActor.run {
+                self.items = processedItems
+                self.total = processedTotal
+                self.symbol = Currency(rawValue: account.currency)?.symbol ?? "$"
+            }
         } catch is CancellationError {
             print("Вышел с экрана, задача отменилась")
         } catch let error as NetworkError {

@@ -48,15 +48,13 @@ final class TransactionsService {
             
         do {
             let accountId = try await getCurrentAccountId()
-            
-            try await syncBackup()
             let response: [APITransactionResponse] = try await networkClient.request(
                 method: "GET",
                 path: "transactions/account/\(accountId)/period",
                 queryItems: queryItems.isEmpty ? nil : queryItems,
                 responseType: [APITransactionResponse].self
             )
-            
+            try await syncBackups()
             return response.map {
                 Transaction(
                     id: $0.id,
@@ -108,14 +106,16 @@ final class TransactionsService {
         return mergedTransactions
     }
     
-    private func syncBackup() async throws{
-        let backups = try backupStorage.allBackups()
-        for backup in backups {
+    private func syncBackups() async throws{
+        print("бекапы гружу")
+        let backupsStorage = try backupStorage.allBackups()
+        let backupsAccount = try bankAccountsService.backupStorage.allBackups()
+        for backup in backupsStorage {
                 do {
                     switch backup.actionType {
                     case .create:
                         let backupTransaction = backup.toTransaction()!
-                        let transaction = try await addTransaction(transaction: backupTransaction)
+                        let transaction = try await addTransaction(transaction: backupTransaction, dir: .income)
                         try backupStorage.remove(id: backup.id)
                         
                     case .update:
@@ -126,13 +126,13 @@ final class TransactionsService {
                             accountId: backupTransaction.accountId,
                             amount: backupTransaction.amount,
                             transactionDate: backupTransaction.transactionDate,
-                            comment: backupTransaction.comment
+                            comment: backupTransaction.comment, dir: .outcome, prev: backupTransaction.amount
                         )
                         try backupStorage.remove(id: backup.id)
                         
                     case .delete:
                         let backupTransaction = backup.toTransaction()!
-                        try await deleteTransaction(id: backupTransaction.id)
+                        try await deleteTransaction(id: backupTransaction.id, prev: backupTransaction.amount, dir: .income)
                         try backupStorage.remove(id: backup.id)
                     case nil:
                         continue
@@ -141,9 +141,27 @@ final class TransactionsService {
                     continue
                 }
             }
+        var account = try await bankAccountsService.getAccount()
+        for backup in backupsAccount {
+            switch backup.action {
+            case .changeCurrency:
+                if let newCurrency = backup.stringValue {
+                    account.currency = newCurrency
+                }
+            
+            case .changeBalance:
+                if let amount = backup.decimalValue {
+                    account.balance += amount
+                }
+            
+            case .changeTransaction: continue
+            }
+        }
+        try await bankAccountsService.updateAccount(amount: account.balance, newCurrencyCode: account.currency)
+        print("бекапы загрузил")
     }
     
-    func addTransaction(transaction: Transaction) async throws -> Transaction {
+    func addTransaction(transaction: Transaction, dir: Direction) async throws -> Transaction {
 
         do {
             let request = CreateTransactionRequest(
@@ -178,6 +196,7 @@ final class TransactionsService {
                 var localTransaction = transaction
                 localTransaction.id = generateTemporaryId()
                 try backupStorage.add(action: .create, transaction: localTransaction)
+                try bankAccountsService.backupStorage.addTransactionChange(amountDelta: dir == .income ? localTransaction.amount : -localTransaction.amount)
                 return localTransaction
             } else {
                 throw error
@@ -185,7 +204,7 @@ final class TransactionsService {
         }
     }
     
-    func editTransaction(id: Int, categoryId: Int, accountId: Int, amount: Decimal, transactionDate: Date, comment: String?) async throws -> Transaction {
+    func editTransaction(id: Int, categoryId: Int, accountId: Int, amount: Decimal, transactionDate: Date, comment: String?, dir: Direction, prev: Decimal) async throws -> Transaction {
         do {
             let request = UpdateTransactionRequest(
                 accountId: accountId,
@@ -227,6 +246,7 @@ final class TransactionsService {
                         updatedAt: Date()
                     )
                 try backupStorage.add(action: .update, transaction: localTransaction)
+                try bankAccountsService.backupStorage.addTransactionChange(amountDelta: dir == .income ? (localTransaction.amount - prev) : -(localTransaction.amount - prev))
                 return localTransaction
             } else {
                 throw error
@@ -234,7 +254,7 @@ final class TransactionsService {
         }
     }
     
-    func deleteTransaction(id: Int) async throws {
+    func deleteTransaction(id: Int, prev: Decimal, dir: Direction) async throws {
         do {
             try await networkClient.request(
                 method: "DELETE",
@@ -245,6 +265,7 @@ final class TransactionsService {
         } catch let error as NetworkError {
             if case .noInternet = error  {
                 try backupStorage.add(action: .delete, transaction: Transaction(id: id, account: 0, category: 0, amount: 0, transactionDate: Date(), comment: "", createdAt: Date(), updatedAt: Date()))
+                try bankAccountsService.backupStorage.addTransactionChange(amountDelta:  dir == .income ? -prev : prev)
             } else {
                 throw error
             }

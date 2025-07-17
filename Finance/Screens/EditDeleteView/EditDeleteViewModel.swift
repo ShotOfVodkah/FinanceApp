@@ -92,7 +92,7 @@ final class EditDeleteViewModel: ObservableObject {
         do {
             let account = try await bankAccountService.getCurrentAccountId()
             if isEditing {
-                try await transactionService.editTransaction(id: transactionId ?? 0, categoryId: selectedCategory!.id, accountId: account, amount: amount ?? 0.00, transactionDate: fullDate, comment: description)
+                try await transactionService.editTransaction(id: transactionId ?? 0, categoryId: selectedCategory!.id, accountId: account, amount: amount ?? 0.00, transactionDate: fullDate, comment: description, dir: direction, prev: prevAmount!)
                 return true
             } else {
                 guard let amount, let selectedCategory else {
@@ -100,7 +100,7 @@ final class EditDeleteViewModel: ObservableObject {
                     return false
                 }
                 
-                try await transactionService.addTransaction(transaction: Transaction(id: 0, account: account, category: selectedCategory.id, amount: amount, transactionDate: fullDate, comment: description, createdAt: Date(), updatedAt: Date()))
+                try await transactionService.addTransaction(transaction: Transaction(id: 0, account: account, category: selectedCategory.id, amount: amount, transactionDate: fullDate, comment: description, createdAt: Date(), updatedAt: Date()), dir: direction)
                 return true
             }
         } catch {
@@ -117,7 +117,7 @@ final class EditDeleteViewModel: ObservableObject {
 
         do {
             if let amt = amount, let id = transactionId {
-                try await transactionService.deleteTransaction(id: id)
+                try await transactionService.deleteTransaction(id: id, prev: prevAmount!, dir: direction)
             }
         } catch {
             self.error = error.localizedDescription

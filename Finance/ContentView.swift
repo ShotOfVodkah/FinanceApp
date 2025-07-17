@@ -27,6 +27,8 @@ struct ContentView: View {
                 return try ModelContainer(
                     for: TransactionStorage.self, BackupTransaction.self,
                         CategoryStorage.self,
+                        BankAccountStorage.self,
+                        BackupAccount.self,
                     configurations: ModelConfiguration(isStoredInMemoryOnly: false))
             } catch {
                 fatalError("Failed to create ModelContainer: \(error)")
@@ -37,9 +39,11 @@ struct ContentView: View {
         let localStorage = SwiftDataTransactionStorage(container: container)
         let backupStorage = TransactionBackupStorage(container: container)
         let categoriesStorage = SwiftDataCategoriesStorage(container: container)
+        let accountStorage = SwiftDataAccountStorage(container: container)
+        let accountBackupStorage = AccountBackupStorage(container: container)
         
         self.categoriesService = CategoriesService(networkClient: networkClient, localStorage: categoriesStorage)
-        self.bankAccountService = BankAccountsService(networkClient: networkClient)
+        self.bankAccountService = BankAccountsService(networkClient: networkClient, localStorage: accountStorage, backupStorage: accountBackupStorage)
         self.transactionsService = TransactionsService(networkClient: networkClient, bankAccountsService: bankAccountService, localStorage: localStorage, backupStorage: backupStorage)
             
         UITabBar.appearance().backgroundColor = UIColor.white

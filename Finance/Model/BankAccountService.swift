@@ -8,9 +8,13 @@
 import Foundation
 final class BankAccountsService {
     private let networkClient: NetworkClient
+    let localStorage: AccountStorageProtocol
+    let backupStorage: AccountBackupStorage
     
-    init(networkClient: NetworkClient) {
+    init(networkClient: NetworkClient, localStorage: AccountStorageProtocol, backupStorage: AccountBackupStorage) {
         self.networkClient = networkClient
+        self.localStorage = localStorage
+        self.backupStorage = backupStorage
     }
     
     func getAccount() async throws -> BankAccount {
@@ -25,7 +29,7 @@ final class BankAccountsService {
                 throw NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: ""])
             }
                 
-            return BankAccount(
+            let bankAccount = BankAccount(
                 id: account.id,
                 userID: account.userId,
                 name: account.name,
@@ -34,41 +38,111 @@ final class BankAccountsService {
                 createdAt: account.createdAt,
                 updatedAt: account.updatedAt
             )
-        } catch {
-            throw NetworkError.noInternet
+            try await localStorage.saveAccount(account: bankAccount)
+            return bankAccount
+        } catch let error as NetworkError {
+            if case .noInternet = error  {
+                print("локально загружаю аккаунт")
+                var account = try await localStorage.getAccount()
+                let backups = try backupStorage.allBackups()
+                for backup in backups {
+                    switch backup.action {
+                    case .changeCurrency:
+                        if let newCurrency = backup.stringValue {
+                            account.currency = newCurrency
+                        }
+                    
+                    case .changeBalance:
+                        if let amount = backup.decimalValue {
+                            account.balance += amount
+                        }
+                    
+                    case .changeTransaction:
+                        if let delta = backup.decimalValue {
+                            account.balance += delta
+                        }
+                    }
+                }
+                return account
+            } else {
+                throw error
+            }
         }
     }
     
     func updateAccount(amount: Decimal, newCurrencyCode: String) async throws -> BankAccount {
-        let account = try await getAccount()
-        
-        let request = UpdateAccountRequest(
-            name: account.name,
-            balance: "\(amount)",
-            currency: newCurrencyCode
-        )
-        
-        let updatedAccount: APIAccount = try await networkClient.request(
-            method: "PUT",
-            path: "accounts/\(account.id)",
-            body: request,
-            responseType: APIAccount.self
-        )
-        
-        return BankAccount(
-            id: updatedAccount.id,
-            userID: updatedAccount.userId,
-            name: updatedAccount.name,
-            balance: Decimal(string: updatedAccount.balance) ?? 0,
-            currency: updatedAccount.currency,
-            createdAt: updatedAccount.createdAt,
-            updatedAt: updatedAccount.updatedAt
-        )
+        do {
+            let account = try await getAccount()
+            
+            let request = UpdateAccountRequest(
+                name: account.name,
+                balance: "\(amount)",
+                currency: newCurrencyCode
+            )
+            
+            let updatedAccount: APIAccount = try await networkClient.request(
+                method: "PUT",
+                path: "accounts/\(account.id)",
+                body: request,
+                responseType: APIAccount.self
+            )
+            
+            let bankAccount = BankAccount(
+                id: updatedAccount.id,
+                userID: updatedAccount.userId,
+                name: updatedAccount.name,
+                balance: Decimal(string: updatedAccount.balance) ?? 0,
+                currency: updatedAccount.currency,
+                createdAt: updatedAccount.createdAt,
+                updatedAt: updatedAccount.updatedAt
+            )
+            try await localStorage.updateAccount(amount: bankAccount.balance, currencyCode: bankAccount.currency)
+            return bankAccount
+        } catch let error as NetworkError {
+            if case .noInternet = error  {
+                print("локально апдейт аккаунта")
+                var account = try await localStorage.getAccount()
+                let backups = try backupStorage.allBackups()
+                for backup in backups {
+                    switch backup.action {
+                    case .changeCurrency:
+                        if let newCurrency = backup.stringValue {
+                            account.currency = newCurrency
+                        }
+                    
+                    case .changeBalance:
+                        if let amount = backup.decimalValue {
+                            account.balance += amount
+                        }
+                    
+                    case .changeTransaction:
+                        if let delta = backup.decimalValue {
+                            account.balance += delta
+                        }
+                    }
+                }
+                try backupStorage.addBalanceChange(amount: amount - account.balance)
+                try backupStorage.addChangeCurrency(newCurrency: newCurrencyCode)
+                account.balance = amount
+                account.currency = newCurrencyCode
+                return account
+            } else {
+                throw error
+            }
+        }
     }
     
     func getCurrentAccountId() async throws -> Int {
-        let account = try await getAccount()
-        return account.id
+        do {
+            let account = try await getAccount()
+            return account.id
+        } catch let error as NetworkError {
+            if case .noInternet = error {
+                return try await localStorage.getCurrentAccountId()
+            } else {
+                throw error
+            }
+        }
     }
 }
 
