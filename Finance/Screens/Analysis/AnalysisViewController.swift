@@ -6,6 +6,7 @@
 //
 import UIKit
 import SwiftUI
+import Combine
 
 class AnalysisViewController: UIViewController, UITableViewDataSource, UITableViewDelegate, UIAdaptivePresentationControllerDelegate {
     
@@ -14,6 +15,7 @@ class AnalysisViewController: UIViewController, UITableViewDataSource, UITableVi
     private let fromDatePicker = UIDatePicker()
     private let toDatePicker = UIDatePicker()
     private let totalLabel = UILabel()
+    private var cancellables = Set<AnyCancellable>()
     
     private lazy var sortControl: UISegmentedControl = {
         let control = UISegmentedControl(items: AnalysisViewModel.SortType.allCases.map { $0.rawValue })
@@ -47,12 +49,12 @@ class AnalysisViewController: UIViewController, UITableViewDataSource, UITableVi
         setupUI()
         setupBindings()
         loadData()
-        
-        view.addSubview(loadingIndicator)
-        NSLayoutConstraint.activate([
-            loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
-        ])
+//
+//        view.addSubview(loadingIndicator)
+//        NSLayoutConstraint.activate([
+//            loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+//            loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+//        ])
         
         NotificationCenter.default.addObserver(
             self,
@@ -67,6 +69,12 @@ class AnalysisViewController: UIViewController, UITableViewDataSource, UITableVi
         setupDatePickers()
         setupTotalLabel()
         setupTableView()
+        
+        view.addSubview(loadingIndicator)
+        NSLayoutConstraint.activate([
+            loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+        ])
     }
     
     private func setupDatePickers() {
@@ -129,33 +137,47 @@ class AnalysisViewController: UIViewController, UITableViewDataSource, UITableVi
     
     private func setupBindings() {
         viewModel.onDatesUpdated = { [weak self] in
-            guard let self = self else { return }
-            self.fromDatePicker.date = self.viewModel.from
-            self.toDatePicker.date = self.viewModel.to
+            self?.fromDatePicker.date = self?.viewModel.from ?? Date()
+            self?.toDatePicker.date = self?.viewModel.to ?? Date()
         }
         
-        viewModel.onDataLoaded = { [weak self] in
-            guard let self = self else { return }
-            let currentIndex = AnalysisViewModel.SortType.allCases.firstIndex(of: self.viewModel.sortType) ?? 0
-            self.sortControl.selectedSegmentIndex = currentIndex
-            self.tableView.reloadData()
-            self.updateTotalLabel()
-            self.loadingIndicator.stopAnimating()
-            
-            if let error = self.viewModel.error {
-                self.showErrorAlert(error)
+        viewModel.$isLoading
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isLoading in
+                isLoading ? self?.loadingIndicator.startAnimating() : self?.loadingIndicator.stopAnimating()
             }
-        }
+            .store(in: &cancellables)
+        
+        viewModel.$items
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.tableView.reloadData()
+            }
+            .store(in: &cancellables)
+        
+        viewModel.$total
+            .combineLatest(viewModel.$сurrencySymbol)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] total, symbol in
+                self?.totalLabel.text = "\(total) \(symbol)"
+            }
+            .store(in: &cancellables)
+        
+        viewModel.$error
+            .compactMap { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] error in
+                self?.showErrorAlert(error)
+            }
+            .store(in: &cancellables)
     }
     
     @objc private func fromDateChanged() {
         viewModel.updateFromDate(fromDatePicker.date)
-        loadingIndicator.startAnimating()
     }
     
     @objc private func toDateChanged() {
         viewModel.updateToDate(toDatePicker.date)
-        loadingIndicator.startAnimating()
     }
     
     @objc private func sortChanged() {
@@ -167,13 +189,12 @@ class AnalysisViewController: UIViewController, UITableViewDataSource, UITableVi
     }
     
     private func loadData() {
-        loadingIndicator.startAnimating()
         viewModel.loadData()
     }
     
-    private func updateTotalLabel() {
-        totalLabel.text = "\(viewModel.total) \(viewModel.сurrencySymbol)"
-    }
+//    private func updateTotalLabel() {
+//        totalLabel.text = "\(viewModel.total) \(viewModel.сurrencySymbol)"
+//    }
     
     private func showErrorAlert(_ message: String) {
         let alert = UIAlertController(
