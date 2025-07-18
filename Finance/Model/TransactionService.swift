@@ -145,13 +145,16 @@ final class TransactionsService {
                 if let newCurrency = backup.stringValue {
                     account.currency = newCurrency
                 }
+                try bankAccountsService.backupStorage.remove(id: backup.id)
             
             case .changeBalance:
                 if let amount = backup.decimalValue {
                     account.balance += amount
                 }
+                try bankAccountsService.backupStorage.remove(id: backup.id)
             
-            case .changeTransaction: continue
+            case .changeTransaction:
+                try bankAccountsService.backupStorage.remove(id: backup.id)
             }
         }
         try await bankAccountsService.updateAccount(amount: account.balance, newCurrencyCode: account.currency)
