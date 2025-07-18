@@ -155,7 +155,6 @@ final class TransactionsService {
             }
         }
         try await bankAccountsService.updateAccount(amount: account.balance, newCurrencyCode: account.currency)
-        print("бекапы загрузил")
     }
     
     func addTransaction(transaction: Transaction, dir: Direction) async throws -> Transaction {

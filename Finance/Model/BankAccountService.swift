@@ -183,7 +183,7 @@ private struct APIAccount: Decodable {
             throw DecodingError.dataCorruptedError(
                 forKey: .createdAt,
                 in: container,
-                debugDescription: "Date string does not match format expected by formatter."
+                debugDescription: "Date string does not match format."
             )
         }
         
