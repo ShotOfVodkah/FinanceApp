@@ -29,7 +29,7 @@ extension NetworkError: LocalizedError {
             return "Некорректный ответ от сервера."
         case .unauthorized:
             return "Вы не авторизованы."
-        case .serverError(let code):
+        case .serverError(_):
             return "Ошибка сервера."
         case .decodingError:
             return "Не удалось декодировать ответ."
@@ -68,12 +68,14 @@ final class NetworkClient {
         responseType: T.Type
     ) async throws -> T {
         do {
+            print("интернет супер")
             let testURL = URL(string: "https://captive.apple.com")!
             var testRequest = URLRequest(url: testURL)
             testRequest.timeoutInterval = 1
                     
             let (_, _) = try await URLSession.shared.data(for: testRequest)
         } catch {
+            print("кидаю тебе эррор интернет")
             throw NetworkError.noInternet
         }
         

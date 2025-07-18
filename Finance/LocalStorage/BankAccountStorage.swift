@@ -50,7 +50,6 @@ final class SwiftDataAccountStorage: AccountStorageProtocol {
             existing.updatedAt = account.updatedAt
         } else {
             modelContext.insert(BankAccountStorage(from: account))
-            print("создал аккаунт")
         }
         try modelContext.save()
     }

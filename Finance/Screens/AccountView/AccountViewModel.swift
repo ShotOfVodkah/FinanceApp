@@ -61,7 +61,7 @@ final class AccountViewModel: ObservableObject {
         isLoading = true
         error = nil
         defer { isLoading = false }
-
+        print(localCurrency.rawValue)
         do {
             try await bankAccountService.updateAccount(amount: amount, newCurrencyCode: localCurrency.rawValue)
             account = try await bankAccountService.getAccount()

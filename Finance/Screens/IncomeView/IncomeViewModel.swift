@@ -53,31 +53,6 @@ final class TransactionsListViewModel: ObservableObject {
             calendar.timeZone = TimeZone.current
             let start = calendar.startOfDay(for: Date())
             let end = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: Date())!
-            
-//            async let transactionsTask = transactionService.getTransactions(from: start, to: end)
-//            async let categoriesTask = categoriesService.getSpecific(dir: direction)
-//            async let accountTask = bankAccountService.getAccount()
-//            
-//            let (transactions, categories, account) = try await (transactionsTask, categoriesTask, accountTask)
-//            
-//            for transaction in transactions {
-//                if let category = categories.first(where: { $0.id == transaction.categoryId }) {
-//                    items.append((transaction, category))
-//                    total += transaction.amount
-//                }
-//            }
-//            
-//            symbol = Currency(rawValue: account.currency)?.symbol ?? ""
-//            
-//            let (transactions, categories) = try await (transactionsTask, categoriesTask)
-//            
-//            for transaction in transactions {
-//                if let category = categories.first(where: { $0.id == transaction.categoryId }) {
-//                    items.append((transaction, category))
-//                    total += transaction.amount
-//                }
-//            }
-//            symbol = "offline"
             let transactions = try await transactionService.getTransactions(from: start, to: end)
             let categories = try await categoriesService.getSpecific(dir: direction)
             let account = try await bankAccountService.getAccount()

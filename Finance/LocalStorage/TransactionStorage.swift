@@ -38,7 +38,6 @@ final class SwiftDataTransactionStorage: TransactionsStorageProtocol {
     func create(transaction: Transaction) async throws {
         modelContext.insert(TransactionStorage(from: transaction))
         try modelContext.save()
-        print("добавлено в локальный storage \(transaction.id)")
     }
 
     func update(transaction: Transaction) async throws {

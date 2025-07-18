@@ -42,7 +42,6 @@ final class BankAccountsService {
             return bankAccount
         } catch let error as NetworkError {
             if case .noInternet = error  {
-                print("локально загружаю аккаунт")
                 var account = try await localStorage.getAccount()
                 let backups = try backupStorage.allBackups()
                 for backup in backups {
@@ -100,7 +99,6 @@ final class BankAccountsService {
             return bankAccount
         } catch let error as NetworkError {
             if case .noInternet = error  {
-                print("локально апдейт аккаунта")
                 var account = try await localStorage.getAccount()
                 let backups = try backupStorage.allBackups()
                 for backup in backups {

@@ -43,7 +43,6 @@ final class TransactionsService {
             let utcTo = utcCalendar.startOfDay(for: to.addingTimeInterval(86400))
             queryItems.append(URLQueryItem(name: "startDate", value: dateFormatter.string(from: utcFrom)))
             queryItems.append(URLQueryItem(name: "endDate", value: dateFormatter.string(from: utcTo)))
-            print("Запрос к серверу: \(dateFormatter.string(from: utcFrom)) - \(dateFormatter.string(from: utcTo))")
         }
             
         do {
@@ -69,7 +68,6 @@ final class TransactionsService {
             }
         } catch let error as NetworkError {
             if case .noInternet = error  {
-                print("локально загружаю")
                 return try await mergedTransactions(from: from, to: to)
             } else {
                 throw error
@@ -107,7 +105,6 @@ final class TransactionsService {
     }
     
     private func syncBackups() async throws{
-        print("бекапы гружу")
         let backupsStorage = try backupStorage.allBackups()
         let backupsAccount = try bankAccountsService.backupStorage.allBackups()
         for backup in backupsStorage {

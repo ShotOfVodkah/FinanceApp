@@ -31,7 +31,6 @@ final class SwiftDataCategoriesStorage: CategoriesStorageProtocol {
     }
     
     func saveCategories(_ categories: [Category]) async throws {
-        print("cохраняю")
         let descriptor = FetchDescriptor<CategoryStorage>()
         try modelContext.fetch(descriptor).forEach { modelContext.delete($0) }
         categories.forEach { category in

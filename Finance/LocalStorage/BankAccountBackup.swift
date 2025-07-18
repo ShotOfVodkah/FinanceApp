@@ -24,21 +24,18 @@ final class AccountBackupStorage {
         let backup = BackupAccount(action: .changeCurrency, stringValue: newCurrency)
         context.insert(backup)
         try context.save()
-        print("Backup: currency change to \(newCurrency)")
     }
     
     func addBalanceChange(amount: Decimal) throws {
         let backup = BackupAccount(action: .changeBalance, decimalValue: amount)
         context.insert(backup)
         try context.save()
-        print("Backup: balance change by \(amount)")
     }
     
     func addTransactionChange(amountDelta: Decimal) throws {
         let backup = BackupAccount(action: .changeTransaction, decimalValue: amountDelta)
         context.insert(backup)
         try context.save()
-        print("Backup: transaction impact \(amountDelta)")
     }
     
     func remove(id: UUID) throws {

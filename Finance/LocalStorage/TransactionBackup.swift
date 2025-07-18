@@ -23,7 +23,6 @@ final class TransactionBackupStorage {
         let backup = BackupTransaction(action: action, transaction: transaction)
         context.insert(backup)
         try context.save()
-        print("операция добавлена в бекап \(transaction.id)")
     }
 
     func remove(id: UUID) throws {
@@ -32,6 +31,5 @@ final class TransactionBackupStorage {
             context.delete(record)
             try context.save()
         }
-        print("убрано из бекапа")
     }
 }
