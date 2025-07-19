@@ -4,19 +4,18 @@
 //
 //  Created by Stepan Polyakov on 08.07.2025.
 //
-
 import UIKit
 import SwiftUI
+import Combine
 
 class AnalysisViewController: UIViewController, UITableViewDataSource, UITableViewDelegate, UIAdaptivePresentationControllerDelegate {
     
-    
     private var viewModel: AnalysisViewModel!
-    
     private let tableView = UITableView(frame: .zero, style: .insetGrouped)
     private let fromDatePicker = UIDatePicker()
     private let toDatePicker = UIDatePicker()
     private let totalLabel = UILabel()
+    private var cancellables = Set<AnyCancellable>()
     
     private lazy var sortControl: UISegmentedControl = {
         let control = UISegmentedControl(items: AnalysisViewModel.SortType.allCases.map { $0.rawValue })
@@ -25,6 +24,12 @@ class AnalysisViewController: UIViewController, UITableViewDataSource, UITableVi
         return control
     }()
     
+    private let loadingIndicator: UIActivityIndicatorView = {
+        let indicator = UIActivityIndicatorView(style: .large)
+        indicator.hidesWhenStopped = true
+        indicator.translatesAutoresizingMaskIntoConstraints = false
+        return indicator
+    }()
     
     init(viewModel: AnalysisViewModel) {
         self.viewModel = viewModel
@@ -39,12 +44,18 @@ class AnalysisViewController: UIViewController, UITableViewDataSource, UITableVi
         NotificationCenter.default.removeObserver(self)
     }
     
-    
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
         setupBindings()
         loadData()
+//
+//        view.addSubview(loadingIndicator)
+//        NSLayoutConstraint.activate([
+//            loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+//            loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+//        ])
+        
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleTransactionChange),
@@ -53,12 +64,17 @@ class AnalysisViewController: UIViewController, UITableViewDataSource, UITableVi
         )
     }
     
-    
     private func setupUI() {
         view.backgroundColor = .systemGray6
         setupDatePickers()
         setupTotalLabel()
         setupTableView()
+        
+        view.addSubview(loadingIndicator)
+        NSLayoutConstraint.activate([
+            loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+        ])
     }
     
     private func setupDatePickers() {
@@ -121,20 +137,40 @@ class AnalysisViewController: UIViewController, UITableViewDataSource, UITableVi
     
     private func setupBindings() {
         viewModel.onDatesUpdated = { [weak self] in
-            guard let self = self else { return }
-            self.fromDatePicker.date = self.viewModel.from
-            self.toDatePicker.date = self.viewModel.to
+            self?.fromDatePicker.date = self?.viewModel.from ?? Date()
+            self?.toDatePicker.date = self?.viewModel.to ?? Date()
         }
         
-        viewModel.onDataLoaded = { [weak self] in
-            guard let self = self else { return }
-            let currentIndex = AnalysisViewModel.SortType.allCases.firstIndex(of: self.viewModel.sortType) ?? 0
-            self.sortControl.selectedSegmentIndex = currentIndex
-            self.tableView.reloadData()
-            self.updateTotalLabel()
-        }
+        viewModel.$isLoading
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isLoading in
+                isLoading ? self?.loadingIndicator.startAnimating() : self?.loadingIndicator.stopAnimating()
+            }
+            .store(in: &cancellables)
+        
+        viewModel.$items
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.tableView.reloadData()
+            }
+            .store(in: &cancellables)
+        
+        viewModel.$total
+            .combineLatest(viewModel.$сurrencySymbol)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] total, symbol in
+                self?.totalLabel.text = "\(total) \(symbol)"
+            }
+            .store(in: &cancellables)
+        
+        viewModel.$error
+            .compactMap { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] error in
+                self?.showErrorAlert(error)
+            }
+            .store(in: &cancellables)
     }
-    
     
     @objc private func fromDateChanged() {
         viewModel.updateFromDate(fromDatePicker.date)
@@ -149,17 +185,28 @@ class AnalysisViewController: UIViewController, UITableViewDataSource, UITableVi
     }
     
     @objc private func handleTransactionChange() {
-        viewModel.loadData()
+        loadData()
     }
     
     private func loadData() {
         viewModel.loadData()
     }
     
-    private func updateTotalLabel() {
-        totalLabel.text = "\(viewModel.total) \(viewModel.сurrencySymbol)"
-    }
+//    private func updateTotalLabel() {
+//        totalLabel.text = "\(viewModel.total) \(viewModel.сurrencySymbol)"
+//    }
     
+    private func showErrorAlert(_ message: String) {
+        let alert = UIAlertController(
+            title: "Ошибка",
+            message: message,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default, handler: { [weak self] _ in
+            self?.viewModel.error = nil
+        }))
+        present(alert, animated: true)
+    }
     
     func numberOfSections(in tableView: UITableView) -> Int {
         return 2
@@ -199,7 +246,6 @@ class AnalysisViewController: UIViewController, UITableViewDataSource, UITableVi
         }
     }
     
-    
     func tableView(_ tableView: UITableView, shouldHighlightRowAt indexPath: IndexPath) -> Bool {
         return indexPath.section != 0
     }
@@ -224,16 +270,13 @@ class AnalysisViewController: UIViewController, UITableViewDataSource, UITableVi
         present(hostingController, animated: true)
     }
     
-    
     func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
         viewModel.loadData()
     }
 }
 
-
 extension Notification.Name {
     static let transactionDidChange = Notification.Name("TransactionDidChangeNotification")
 }
-
 
 

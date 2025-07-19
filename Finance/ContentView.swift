@@ -6,15 +6,46 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct ContentView: View {
-    
     @State var selectedTab = 0
-    let transactionsService = TransactionsService()
-    let categoriesService = CategoriesService()
-    let bankAccountService = BankAccountsService()
     
+    let networkClient: NetworkClient
+    let categoriesService: CategoriesService
+    let bankAccountService: BankAccountsService
+    let transactionsService: TransactionsService
+    @State private var modelContainer: ModelContainer
+
     init() {
+        self.networkClient = NetworkClient(
+            baseURL: "https://shmr-finance.ru/api/v1/",
+            token: "TmtbkBpyxXtgzPQCbLMvUnCD"
+        )
+        let container: ModelContainer = {
+            do {
+                return try ModelContainer(
+                    for: TransactionStorage.self, BackupTransaction.self,
+                        CategoryStorage.self,
+                        BankAccountStorage.self,
+                        BackupAccount.self,
+                    configurations: ModelConfiguration(isStoredInMemoryOnly: false))
+            } catch {
+                fatalError("Failed to create ModelContainer: \(error)")
+            }
+        }()
+        _modelContainer = State(initialValue: container)
+
+        let localStorage = SwiftDataTransactionStorage(container: container)
+        let backupStorage = TransactionBackupStorage(container: container)
+        let categoriesStorage = SwiftDataCategoriesStorage(container: container)
+        let accountStorage = SwiftDataAccountStorage(container: container)
+        let accountBackupStorage = AccountBackupStorage(container: container)
+        
+        self.categoriesService = CategoriesService(networkClient: networkClient, localStorage: categoriesStorage)
+        self.bankAccountService = BankAccountsService(networkClient: networkClient, localStorage: accountStorage, backupStorage: accountBackupStorage)
+        self.transactionsService = TransactionsService(networkClient: networkClient, bankAccountsService: bankAccountService, localStorage: localStorage, backupStorage: backupStorage)
+            
         UITabBar.appearance().backgroundColor = UIColor.white
         UITabBar.appearance().barTintColor = UIColor.white
     }
@@ -57,6 +88,7 @@ struct ContentView: View {
                 }
                 .tag(4)
         }
+        .modelContainer(modelContainer)
     }
 }
 

@@ -8,36 +8,48 @@
 import SwiftUI
 
 struct EditDeleteView: View {
-    
     @StateObject private var viewModel: EditDeleteViewModel
     @Environment(\.dismiss) private var dismiss
-    
+
     init(transactionsService: TransactionsService, categoriesService: CategoriesService, direction: Direction, bankAccountService: BankAccountsService, selectedTransaction: (Transaction, Category)? = nil) {
         _viewModel = StateObject(wrappedValue: EditDeleteViewModel(transactionService: transactionsService, categoriesService: categoriesService, direction: direction, bankAccountService: bankAccountService, selectedTransaction: selectedTransaction))
     }
-    
+
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    categoryPicker
-                    amountPicker
-                    datePicker
-                    timePicker
-                    descriptionPicker
-                }
+            ZStack {
+                Color(.systemGray6)
+                    .edgesIgnoringSafeArea(.all)
                 
-                if viewModel.isEditing {
-                    Section {
-                        deleteButton
+                Group {
+                    if viewModel.isLoading {
+                        ProgressView()
+                            .scaleEffect(1.5)
+                    } else {
+                        List {
+                            Section {
+                                categoryPicker
+                                amountPicker
+                                datePicker
+                                timePicker
+                                descriptionPicker
+                            }
+
+                            if viewModel.isEditing {
+                                Section {
+                                    deleteButton
+                                }
+                            }
+                        }
+                        .listStyle(.insetGrouped)
                     }
                 }
+                .transition(.opacity)
             }
-            .background(Color(.systemGray6))
-            .toolbar(content: toolbarContent)
+            .animation(.easeInOut(duration: 0.3), value: viewModel.isLoading)
             .navigationTitle(viewModel.directionText)
             .navigationBarBackButtonHidden(true)
-            .listStyle(.insetGrouped)
+            .toolbar(content: toolbarContent)
             .task {
                 await viewModel.load()
             }
@@ -47,12 +59,19 @@ struct EditDeleteView: View {
                 titleVisibility: .visible,
                 actions: confirmationDialogContent
             )
+            .alert("Ошибка", isPresented: .constant(viewModel.error != nil)) {
+                Button("Ок", role: .cancel) {
+                    viewModel.error = nil
+                }
+            } message: {
+                Text(viewModel.error ?? "Неизвестная ошибка")
+            }
             .alert("Не все необходимые поля заполнены 💋", isPresented: $viewModel.isShowingAlert) {
                 Button("OK", role: .cancel) { }
             }
         }
     }
-    
+
     @ToolbarContentBuilder
     private func toolbarContent() -> some ToolbarContent {
         ToolbarItem(placement: .navigationBarLeading) {
@@ -60,7 +79,7 @@ struct EditDeleteView: View {
                 dismiss()
             }
         }
-            
+
         ToolbarItem(placement: .navigationBarTrailing) {
             Button(viewModel.buttonText) {
                 Task {
@@ -73,11 +92,11 @@ struct EditDeleteView: View {
             }
         }
     }
-        
+
     private func confirmationDialogContent() -> some View {
         ForEach(viewModel.categories, id: \.id) { category in
             Button {
-                    viewModel.selectedCategory = category
+                viewModel.selectedCategory = category
             } label: {
                 HStack {
                     Text("\(category.emoji)  \(category.name)")
@@ -85,7 +104,7 @@ struct EditDeleteView: View {
             }
         }
     }
-    
+
     private var categoryPicker: some View {
         Button {
             viewModel.isChoosingCategory.toggle()
@@ -100,7 +119,7 @@ struct EditDeleteView: View {
         }
         .buttonStyle(.plain)
     }
-    
+
     private var amountPicker: some View {
         HStack {
             Text("Сумма")
@@ -117,7 +136,7 @@ struct EditDeleteView: View {
             UIApplication.shared.sendAction(#selector(UIResponder.becomeFirstResponder), to: nil, from: nil, for: nil)
         }
     }
-    
+
     private var datePicker: some View {
         DatePicker("Дата", selection: $viewModel.selectedDate, in: ...Date(), displayedComponents: .date)
             .onChange(of: viewModel.selectedDate) {
@@ -131,21 +150,22 @@ struct EditDeleteView: View {
                 viewModel.updateTime()
             }
     }
-    
+
     private var descriptionPicker: some View {
         TextField("Комментарий", text: $viewModel.description)
     }
-    
+
     private var deleteButton: some View {
         Button {
             Task {
                 await viewModel.delete()
                 NotificationCenter.default.post(name: .transactionDidChange, object: nil)
+                dismiss()
             }
-            dismiss()
         } label: {
             Text(viewModel.deleteText)
                 .foregroundStyle(Color.red)
         }
     }
 }
+

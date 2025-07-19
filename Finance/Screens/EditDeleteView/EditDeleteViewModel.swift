@@ -14,71 +14,116 @@ final class EditDeleteViewModel: ObservableObject {
     let categoriesService: CategoriesService
     let bankAccountService: BankAccountsService
     let direction: Direction
-    
+
     var isEditing: Bool = false
-    
-    var buttonText: String {
-        if isEditing {
-            return "Сохранить"
-        } else {
-            return "Создать"
-        }
-    }
-    var directionText: String {
-        switch direction {
-        case .income: return "Мои доходы"
-        case .outcome: return "Мои расходы"
-        }
-    }
-    var deleteText: String {
-        switch direction {
-        case .income: return "Удалить доход"
-        case .outcome: return "Удалить расход"
-        }
-    }
-    
+    private var transactionId: Int?
+    var categories: [Category] = []
+
     @Published var amountText: String = ""
     var amount: Decimal? = nil
     var prevAmount: Decimal? = nil
-    
-    @Published var selectedDate: Date = Date()
-    @Published var selectedTime: Date = Date()
-    var fullDate: Date = Date()
-    
+
+    @Published var selectedDate: Date 
+    @Published var selectedTime: Date
+    var fullDate: Date
+
     @Published var description: String = ""
     @Published var selectedCategory: Category? = nil
-    
-    private var transactionId: Int?
-    
-    @Published var isChoosingCategory: Bool = false
-    @Published var isShowingAlert: Bool = false
-    
-    var categories: [Category] = []
-    
+
+    @Published var isChoosingCategory = false
+    @Published var isShowingAlert = false
+
+    @Published var isLoading = false
+    @Published var error: String?
+
+    var buttonText: String {
+        isEditing ? "Сохранить" : "Создать"
+    }
+
+    var directionText: String {
+        direction == .income ? "Мои доходы" : "Мои расходы"
+    }
+
+    var deleteText: String {
+        direction == .income ? "Удалить доход" : "Удалить расход"
+    }
+
     init(transactionService: TransactionsService, categoriesService: CategoriesService, direction: Direction, bankAccountService: BankAccountsService, selectedTransaction: (Transaction, Category)? = nil) {
         self.categoriesService = categoriesService
         self.transactionService = transactionService
         self.direction = direction
         self.bankAccountService = bankAccountService
+
         if let transaction = selectedTransaction {
-            self.amountText = "\(transaction.0.amount)"
-            self.selectedDate = transaction.0.transactionDate
-            self.selectedTime = transaction.0.transactionDate
-            self.description = transaction.0.comment ?? ""
-            self.amount = transaction.0.amount
-            self.prevAmount = transaction.0.amount
-            self.fullDate = transaction.0.transactionDate
-            self.selectedCategory = transaction.1
-            self.transactionId = transaction.0.id
-            self.isEditing = true
+            amountText = "\(transaction.0.amount)"
+            selectedDate = transaction.0.transactionDate
+            selectedTime = transaction.0.transactionDate
+            description = transaction.0.comment ?? ""
+            amount = transaction.0.amount
+            prevAmount = transaction.0.amount
+            fullDate = transaction.0.transactionDate
+            selectedCategory = transaction.1
+            transactionId = transaction.0.id
+            isEditing = true
+        } else {
+            selectedDate = Date()
+            selectedTime = Date()
+            fullDate = Date()
         }
-        
     }
-    
+
     func load() async {
-        await categories = categoriesService.getSpecific(dir: direction)
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            categories = try await categoriesService.getSpecific(dir: direction)
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
-    
+
+    func save() async -> Bool {
+        guard !isLoading else { return false }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            let account = try await bankAccountService.getCurrentAccountId()
+            if isEditing {
+                try await transactionService.editTransaction(id: transactionId ?? 0, categoryId: selectedCategory!.id, accountId: account, amount: amount ?? 0.00, transactionDate: fullDate, comment: description, dir: direction, prev: prevAmount!)
+                return true
+            } else {
+                guard let amount, let selectedCategory else {
+                    isShowingAlert = true
+                    return false
+                }
+                
+                try await transactionService.addTransaction(transaction: Transaction(id: 0, account: account, category: selectedCategory.id, amount: amount, transactionDate: fullDate, comment: description, createdAt: Date(), updatedAt: Date()), dir: direction)
+                return true
+            }
+        } catch {
+            self.error = error.localizedDescription
+            return false
+        }
+    }
+
+    func delete() async {
+        guard !isLoading else { return }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            if let amt = amount, let id = transactionId {
+                try await transactionService.deleteTransaction(id: id, prev: prevAmount!, dir: direction)
+            }
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
     func checkInput(num: String) {
         let locale = Locale.current
         let decimalSeparator = locale.decimalSeparator ?? "."
@@ -98,42 +143,26 @@ final class EditDeleteViewModel: ObservableObject {
             amount = nil
         }
     }
-    
+
     func updateDate() {
-        let date = Calendar.current.startOfDay(for: selectedDate)
-        let time = Calendar.current.dateComponents([.hour, .minute], from: selectedTime)
-        fullDate = Calendar.current.date(byAdding: time, to: date) ?? fullDate
+        var calendar = Calendar.current
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let existingNanoseconds = calendar.dateComponents([.nanosecond], from: fullDate).nanosecond
+        let dateComponents = calendar.dateComponents([.year, .month, .day], from: selectedDate)
+        let timeComponents = calendar.dateComponents([.hour, .minute, .second], from: selectedTime)
+        var mergedComponents = DateComponents()
+        mergedComponents.year = dateComponents.year
+        mergedComponents.month = dateComponents.month
+        mergedComponents.day = dateComponents.day
+        mergedComponents.hour = timeComponents.hour
+        mergedComponents.minute = timeComponents.minute
+        mergedComponents.second = timeComponents.second
+        mergedComponents.nanosecond = existingNanoseconds
+        fullDate = calendar.date(from: mergedComponents) ?? Date()
     }
-    
+
     func updateTime() {
-        let date = Calendar.current.startOfDay(for: selectedDate)
-        let time = Calendar.current.dateComponents([.hour, .minute], from: selectedTime)
-        fullDate = Calendar.current.date(byAdding: time, to: date) ?? fullDate
-    }
-    
-    
-    func delete() async {
-        if let amt = amount, let id = transactionId{
-            await bankAccountService.changeBalance(amount: amt, add: false)
-            await transactionService.deleteTransaction(id: id)
-        }
-    }
-    
-    func save() async -> Bool {
-        if isEditing {
-            await bankAccountService.changeBalance(amount: (prevAmount ?? 0.0) - (amount ?? 0.0), add: false)
-            await transactionService.editTransaction(id: transactionId ?? 0, category: selectedCategory?.id, amount: amount, transactionDate: fullDate, comment: description)
-            return true
-        } else {
-            guard let amount = amount, let selectedCategory = selectedCategory else {
-                isShowingAlert = true
-                return false
-            }
-            let account = await bankAccountService.getAccount().id
-            let id = transactionService.getId()
-            await bankAccountService.changeBalance(amount: amount, add: true)
-            await transactionService.addTransaction(transaction: Transaction(id: id, account: account, category: selectedCategory.id, amount: amount, transactionDate: fullDate, comment: description, createdAt: Date(), updatedAt: Date()))
-            return true
-        }
+        updateDate()
     }
 }
+

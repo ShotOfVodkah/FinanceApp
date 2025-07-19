@@ -8,44 +8,61 @@
 import SwiftUI
 
 struct AccountView: View {
-    
     @State private var isEditing: Bool = false
     @State private var showCurrency = false
     @State private var showTextField = false
     @State private var deviceShaken = false
-    @State private var newBalanceText = ""
-    
+
     @StateObject private var viewModel: AccountViewModel
-    
+
     init(bankAccountModel: BankAccountsService) {
         _viewModel = StateObject(wrappedValue: AccountViewModel(bankAccountService: bankAccountModel))
     }
-    
+
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 20) {
-                    if let account = viewModel.account {
-                            if isEditing {
-                                balanceEdit(account: account)
-                                currencyEdit()
-                            } else {
-                                balanceView(account: account)
-                                currencyView()
+            ZStack {
+                Color(.systemGray6)
+                    .edgesIgnoringSafeArea(.all)
+                
+                Group {
+                    if viewModel.isLoading {
+                        ProgressView()
+                            .scaleEffect(1.5)
+                    } else {
+                        ScrollView {
+                            VStack(spacing: 20) {
+                                if let account = viewModel.account {
+                                    if isEditing {
+                                        balanceEdit(account: account)
+                                        currencyEdit()
+                                    } else {
+                                        balanceView(account: account)
+                                        currencyView()
+                                    }
+                                }
                             }
+                            .padding()
+                        }
                     }
                 }
+                .transition(.opacity)
             }
-            .padding()
+            .animation(.easeInOut(duration: 0.3), value: viewModel.isLoading)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .background(Color(.systemGray6))
-            .navigationTitle("Мой счет")
-            .refreshable {
-                await viewModel.refresh()
-            }
+            .navigationTitle("Мой счёт")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
+                        if isEditing {
+                            Task {
+                                await viewModel.updateAccount()
+                            }
+                        } else {
+                            viewModel.localBalanceText = viewModel.account?.balance.description ?? ""
+                            viewModel.formattedBalanceText = viewModel.localBalanceText
+                            viewModel.localCurrency = Currency(rawValue: viewModel.account?.currency ?? "") ?? .rub
+                        }
                         withAnimation(.easeInOut) {
                             isEditing.toggle()
                         }
@@ -57,20 +74,30 @@ struct AccountView: View {
             .task {
                 await viewModel.load()
             }
+            .refreshable {
+                Task {
+                    await viewModel.refresh()
+                }
+            }
             .confirmationDialog("Выберите валюту", isPresented: $showCurrency, titleVisibility: .visible) {
                 ForEach(Currency.allCases, id: \.self) { currency in
                     Button {
-                        Task {
-                            await viewModel.updateCurrency(newCurrency: currency.rawValue)
-                        }
+                        viewModel.localCurrency = currency
                     } label: {
                         Text(currency.fullName)
                     }
                 }
             }
+            .alert("Ошибка", isPresented: .constant(viewModel.error != nil)) {
+                Button("Ок", role: .cancel) {
+                    viewModel.error = nil
+                }
+            } message: {
+                Text(viewModel.error ?? "Неизвестная ошибка")
+            }
         }
     }
-    
+
     private func balanceView(account: BankAccount) -> some View {
         HStack {
             Text("💰  Баланс")
@@ -87,7 +114,7 @@ struct AccountView: View {
         .background(Color.accentColor)
         .clipShape(RoundedRectangle(cornerRadius: 15))
     }
-    
+
     private func currencyView() -> some View {
         HStack {
             Text("Валюта")
@@ -98,7 +125,7 @@ struct AccountView: View {
         .background(Color.accentColor.opacity(0.2))
         .clipShape(RoundedRectangle(cornerRadius: 15))
     }
-    
+
     private func balanceEdit(account: BankAccount) -> some View {
         VStack {
             Button {
@@ -110,14 +137,14 @@ struct AccountView: View {
                     Text("💰  Баланс")
                         .foregroundColor(.black)
                     Spacer()
-                    Text("\(account.balance) \(viewModel.currency)")
+                    Text("\(viewModel.formattedBalanceText) \(viewModel.localCurrency.symbol)")
                         .foregroundColor(.gray)
                         .opacity(showTextField ? 0.0 : 1.0)
                 }
             }
             if showTextField {
                 HStack {
-                    TextField("Изменить баланc", text: $newBalanceText)
+                    TextField("Изменить баланс", text: $viewModel.localBalanceText)
                         .keyboardType(.decimalPad)
                         .padding()
                         .background(Color(.systemGray6))
@@ -125,8 +152,7 @@ struct AccountView: View {
 
                     Button("Готово") {
                         Task {
-                            await viewModel.updateBalance(input: newBalanceText)
-                            newBalanceText = ""
+                            viewModel.formatBalanceText() 
                             withAnimation(.easeInOut) {
                                 showTextField = false
                             }
@@ -134,16 +160,16 @@ struct AccountView: View {
                     }
                     .padding()
                     .background(Color.accentColor)
+                    .foregroundColor(.white)
                     .clipShape(RoundedRectangle(cornerRadius: 15))
                 }
             }
         }
         .padding()
         .background(Color.white)
-        .foregroundStyle(Color.black)
         .clipShape(RoundedRectangle(cornerRadius: 15))
     }
-    
+
     private func currencyEdit() -> some View {
         Button {
             showCurrency.toggle()
@@ -152,17 +178,17 @@ struct AccountView: View {
                 Text("Валюта")
                     .foregroundColor(.black)
                 Spacer()
-                Text(viewModel.currency)
+                Text(viewModel.localCurrency.symbol)
                     .foregroundColor(.gray)
                 Image(systemName: "chevron.right")
                     .foregroundColor(.gray)
             }
             .padding()
             .background(Color.white)
-            .foregroundStyle(Color.black)
             .clipShape(RoundedRectangle(cornerRadius: 15))
         }
     }
 }
+
 
 
