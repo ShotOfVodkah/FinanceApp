@@ -17,6 +17,7 @@ struct ContentView: View {
     let transactionsService: TransactionsService
     @State private var modelContainer: ModelContainer
 
+    
     init() {
         self.networkClient = NetworkClient(
             baseURL: "https://shmr-finance.ru/api/v1/",
