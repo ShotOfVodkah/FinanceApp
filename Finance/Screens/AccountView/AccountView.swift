@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Charts
 
 struct AccountView: View {
     @State private var isEditing: Bool = false
@@ -15,8 +16,8 @@ struct AccountView: View {
 
     @StateObject private var viewModel: AccountViewModel
 
-    init(bankAccountModel: BankAccountsService) {
-        _viewModel = StateObject(wrappedValue: AccountViewModel(bankAccountService: bankAccountModel))
+    init(bankAccountModel: BankAccountsService, transactionService: TransactionsService, categoriesService: CategoriesService) {
+        _viewModel = StateObject(wrappedValue: AccountViewModel(bankAccountService: bankAccountModel, transactionService: transactionService, categoriesService: categoriesService))
     }
 
     var body: some View {
@@ -39,6 +40,7 @@ struct AccountView: View {
                                     } else {
                                         balanceView(account: account)
                                         currencyView()
+                                        balanceChart(balances: viewModel.balances)
                                     }
                                 }
                             }
@@ -187,6 +189,32 @@ struct AccountView: View {
             .background(Color.white)
             .clipShape(RoundedRectangle(cornerRadius: 15))
         }
+    }
+    
+    @ViewBuilder
+    private func balanceChart(balances: [BalanceBar]) -> some View {
+        Chart {
+            ForEach(balances) { entry in
+                BarMark(
+                    x: .value("Date", entry.date, unit: .day),
+                    y: .value("Balance", entry.balance == 0 ? 50 : abs((entry.balance as NSDecimalNumber).doubleValue))
+                )
+                .foregroundStyle(entry.balance == 0
+                                 ? Color.gray.opacity(0.4)
+                                 : (entry.balance > 0 ? Color.green : Color.red))
+                .cornerRadius(10)
+            }
+        }
+        .chartYAxis(.hidden)
+        .chartXAxis {
+            AxisMarks(values: .stride(by: .day, count: 7)) { value in
+                AxisValueLabel(format: .dateTime.day().month(.twoDigits), centered: true)
+            }
+        }
+        .frame(height: 200)
+        .padding(.vertical)
+        .background(Color(.systemGray6))
+        .clipShape(RoundedRectangle(cornerRadius: 15))
     }
 }
 

@@ -67,7 +67,7 @@ struct ContentView: View {
                         .renderingMode(.template)
                 }
                 .tag(1)
-            AccountView(bankAccountModel: bankAccountService)
+            AccountView(bankAccountModel: bankAccountService, transactionService: transactionsService, categoriesService: categoriesService)
                 .tabItem{
                     Text("Счет")
                     Image("icon_account")
