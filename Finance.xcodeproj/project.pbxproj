@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		5D9C247E2E323865007F24C0 /* PieChart in Frameworks */ = {isa = PBXBuildFile; productRef = 5D9C247D2E323865007F24C0 /* PieChart */; };
+		5D9C316B2E326C8D007F24C0 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 5D9C316A2E326C8D007F24C0 /* Lottie */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -70,6 +71,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				5D9C247E2E323865007F24C0 /* PieChart in Frameworks */,
+				5D9C316B2E326C8D007F24C0 /* Lottie in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -139,6 +141,7 @@
 			name = Finance;
 			packageProductDependencies = (
 				5D9C247D2E323865007F24C0 /* PieChart */,
+				5D9C316A2E326C8D007F24C0 /* Lottie */,
 			);
 			productName = Finance;
 			productReference = 5DDC2DA72DFC0058004D78FC /* Finance.app */;
@@ -222,6 +225,9 @@
 			);
 			mainGroup = 5DDC2D9E2DFC0057004D78FC;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5D9C31692E326C8D007F24C0 /* XCRemoteSwiftPackageReference "lottie-ios" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 5DDC2DA82DFC0058004D78FC /* Products */;
 			projectDirPath = "";
@@ -588,10 +594,26 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		5D9C31692E326C8D007F24C0 /* XCRemoteSwiftPackageReference "lottie-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/airbnb/lottie-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.5.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		5D9C247D2E323865007F24C0 /* PieChart */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = PieChart;
+		};
+		5D9C316A2E326C8D007F24C0 /* Lottie */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5D9C31692E326C8D007F24C0 /* XCRemoteSwiftPackageReference "lottie-ios" */;
+			productName = Lottie;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
