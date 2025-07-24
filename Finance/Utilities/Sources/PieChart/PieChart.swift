@@ -8,7 +8,7 @@
 import Foundation
 import UIKit
 
-public struct Entity {
+public struct Entity: Equatable {
     public let value: Decimal
     public let label: String
 
@@ -31,16 +31,14 @@ public struct PieChart {
 
 public final class PieChartView: UIView {
     
-    public var entities: [Entity] = [] {
-        didSet {
-            setNeedsDisplay()
-        }
-    }
+    private var entities: [Entity] = []
     
     public var lineWidth: CGFloat = 10.0
     public var legendFont: UIFont = .systemFont(ofSize: 10)
     public var legendTextColor: UIColor = .black
     
+    private var isAnimating = false
+
     public override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = .clear
@@ -50,6 +48,18 @@ public final class PieChartView: UIView {
         super.init(coder: coder)
         backgroundColor = .clear
     }
+
+    
+    public func setEntities(_ newEntities: [Entity], animated: Bool = false) {
+            guard animated else {
+                self.entities = newEntities
+                setNeedsDisplay()
+                return
+            }
+            
+            animateTransition(to: newEntities)
+        }
+
     
     public override func draw(_ rect: CGRect) {
         guard let context = UIGraphicsGetCurrentContext(), !entities.isEmpty else { return }
@@ -63,13 +73,11 @@ public final class PieChartView: UIView {
         guard totalValue > 0 else { return }
         
         var startAngle = -CGFloat.pi / 2
-        let topEntities = Array(entities.prefix(5))
-        var allEntitiesToDisplay = topEntities
-        
+        var allEntitiesToDisplay = Array(entities.prefix(5))
         if othersTotal > 0 {
             allEntitiesToDisplay.append(Entity(value: Decimal(othersTotal), label: "Остальные"))
         }
-        
+
         for (index, entity) in allEntitiesToDisplay.enumerated() {
             let value = (entity.value as NSDecimalNumber).doubleValue
             let angle = CGFloat(value / totalValue) * 2 * .pi
@@ -139,11 +147,36 @@ public final class PieChartView: UIView {
             yOffset += lineHeight + spacing
         }
     }
+    
+    private func animateTransition(to newEntities: [Entity]) {
+        guard !isAnimating else { return }
+        isAnimating = true
 
-}
+        let halfTurn = CGAffineTransform(rotationAngle: .pi)
 
-fileprivate extension Collection {
-    subscript(safe index: Index) -> Element? {
-        return indices.contains(index) ? self[index] : nil
+        UIView.animate(withDuration: 0.4, animations: {
+            self.transform = halfTurn
+            self.alpha = 0
+        }, completion: { _ in
+            self.entities = newEntities
+            self.setNeedsDisplay()
+
+            self.transform = CGAffineTransform(rotationAngle: -.pi)
+            self.alpha = 0
+
+            UIView.animate(withDuration: 0.4, animations: {
+                self.transform = .identity
+                self.alpha = 1
+            }, completion: { _ in
+                self.isAnimating = false
+            })
+        })
     }
 }
+
+private extension Array {
+    subscript(safe index: Index) -> Element? {
+        indices.contains(index) ? self[index] : nil
+    }
+}
+

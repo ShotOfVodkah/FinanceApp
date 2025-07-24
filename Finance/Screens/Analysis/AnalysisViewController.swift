@@ -57,12 +57,6 @@ class AnalysisViewController: UIViewController, UITableViewDataSource, UITableVi
         setupUI()
         setupBindings()
         loadData()
-//
-//        view.addSubview(loadingIndicator)
-//        NSLayoutConstraint.activate([
-//            loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-//            loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
-//        ])
         
         NotificationCenter.default.addObserver(
             self,
@@ -159,8 +153,14 @@ class AnalysisViewController: UIViewController, UITableViewDataSource, UITableVi
         
         viewModel.$items
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.tableView.reloadSections(IndexSet(integersIn: 1...2), with: .automatic)
+            .sink { [weak self] items in
+                guard let self = self else { return }
+                    
+                if self.viewModel.isLoading {
+                    self.tableView.reloadSections(IndexSet(integer: 2), with: .none)
+                } else {
+                    self.tableView.reloadSections(IndexSet(integersIn: 1...2), with: .automatic)
+                }
             }
             .store(in: &cancellables)
         
@@ -353,7 +353,14 @@ class PieChartTableViewCell: UITableViewCell {
         ])
     }
     
+    private var lastEntities: [Entity] = []
+
     func configure(with entities: [Entity]) {
-        pieChartView.entities = entities
+        let oldValues = lastEntities.map { "\($0.value)-\($0.label)" }.sorted()
+        let newValues = entities.map { "\($0.value)-\($0.label)" }.sorted()
+        let animated = oldValues != newValues
+        
+        pieChartView.setEntities(entities, animated: animated)
+        lastEntities = entities
     }
 }
