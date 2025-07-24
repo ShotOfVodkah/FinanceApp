@@ -41,7 +41,7 @@ struct AccountView: View {
                                         balanceView(account: account)
                                         currencyView()
                                         pickerView()
-                                        balanceChart(balances: viewModel.balances, period: viewModel.selectedPeriod)
+                                        balanceChart(balances: viewModel.currentBalances, period: viewModel.selectedPeriod)
                                     }
                                 }
                             }
@@ -139,9 +139,6 @@ struct AccountView: View {
                 }
             }
             .pickerStyle(DefaultPickerStyle())
-            .onChange(of: viewModel.selectedPeriod) { _ in
-                Task {await viewModel.reloadBalances()}
-            }
         }
         .padding(.horizontal)
         .padding(.vertical, 10)
@@ -306,8 +303,7 @@ struct AccountView: View {
         .frame(height: 200)
         .padding(.vertical)
         .background(Color(.systemGray6))
-        .id(period)
-        .transition(.opacity)
+        .animation(.easeInOut(duration: 0.4), value: viewModel.selectedPeriod)
     }
 }
 

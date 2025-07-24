@@ -23,6 +23,7 @@ final class AccountViewModel: ObservableObject {
 
     @Published var account: BankAccount?
     @Published var isLoading = false
+    @Published var isReloadingBalances = false
     @Published var error: String?
     
     enum StatisticsPeriod: String, CaseIterable, Identifiable {
@@ -30,11 +31,18 @@ final class AccountViewModel: ObservableObject {
         case monthly = "Месяцы"
         var id: String { self.rawValue }
     }
+    
     @Published var selectedPeriod: StatisticsPeriod = .daily
-    @Published var balances: [BalanceBar] = []
+    @Published private var dailyBalances: [BalanceBar] = []
+    @Published private var monthlyBalances: [BalanceBar] = []
     @Published var selectedEntry: BalanceBar?
+    
     private var allTransactions: [Transaction] = []
     private var allCategories: [Category] = []
+
+    var currentBalances: [BalanceBar] {
+        selectedPeriod == .daily ? dailyBalances : monthlyBalances
+    }
 
     var currency: String {
         guard let code = account?.currency,
@@ -46,13 +54,9 @@ final class AccountViewModel: ObservableObject {
     @Published var formattedBalanceText: String = ""
     @Published var localCurrency: Currency = .rub
 
-    var currencyString: String {
-        guard let code = account?.currency,
-              let currency = Currency(rawValue: code) else { return "" }
-        return currency.fullName
-    }
-
-    init(bankAccountService: BankAccountsService, transactionService: TransactionsService, categoriesService: CategoriesService) {
+    init(bankAccountService: BankAccountsService,
+         transactionService: TransactionsService,
+         categoriesService: CategoriesService) {
         self.bankAccountService = bankAccountService
         self.categoriesService = categoriesService
         self.transactionService = transactionService
@@ -65,7 +69,7 @@ final class AccountViewModel: ObservableObject {
 
         do {
             account = try await bankAccountService.getAccount()
-
+            
             let calendar = Calendar.current
             let today = calendar.startOfDay(for: Date())
             let startDate = calendar.date(byAdding: .month, value: -23, to: today)!
@@ -77,16 +81,67 @@ final class AccountViewModel: ObservableObject {
             self.allCategories = categories
             self.allTransactions = transactions
 
-            await reloadBalances()
+            async let dailyTask = loadBalances(for: .daily)
+            async let monthlyTask = loadBalances(for: .monthly)
+            let (daily, monthly) = await (try dailyTask, try monthlyTask)
+            
+            withAnimation(.spring()) {
+                self.dailyBalances = daily
+                self.monthlyBalances = monthly
+            }
 
-        } catch is CancellationError {
-            print("Вышел с экрана, задача отменилась")
         } catch {
             self.error = error.localizedDescription
         }
     }
 
+    private func loadBalances(for period: StatisticsPeriod) throws -> [BalanceBar] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        var results: [BalanceBar] = []
 
+        let grouped: [Date: [Transaction]] = {
+            switch period {
+            case .daily:
+                return Dictionary(grouping: allTransactions) { calendar.startOfDay(for: $0.transactionDate) }
+            case .monthly:
+                return Dictionary(grouping: allTransactions) {
+                    let comps = calendar.dateComponents([.year, .month], from: $0.transactionDate)
+                    return calendar.date(from: comps)!
+                }
+            }
+        }()
+
+        switch period {
+        case .daily:
+            for offset in (0..<30).reversed() {
+                let day = calendar.date(byAdding: .day, value: -offset, to: today)!
+                let dayTransactions = grouped[day] ?? []
+                let total = calculateTotal(for: dayTransactions)
+                results.append(BalanceBar(date: day, balance: total))
+            }
+            
+        case .monthly:
+            let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: today))!
+            for offset in (0..<24).reversed() {
+                let month = calendar.date(byAdding: .month, value: -offset, to: monthStart)!
+                let monthTransactions = grouped[month] ?? []
+                let total = calculateTotal(for: monthTransactions)
+                results.append(BalanceBar(date: month, balance: total))
+            }
+        }
+        
+        return results
+    }
+    
+    private func calculateTotal(for transactions: [Transaction]) -> Decimal {
+        transactions.reduce(Decimal.zero) { total, tx in
+            guard let category = allCategories.first(where: { $0.id == tx.categoryId }) else {
+                return total
+            }
+            return category.direction == .income ? total + tx.amount : total - tx.amount
+        }
+    }
 
     func refresh() async {
         await load()
@@ -121,66 +176,4 @@ final class AccountViewModel: ObservableObject {
             }
             localBalanceText = formattedBalanceText
         }
-    
-    func reloadBalances() async {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-
-        let grouped: [Date: [Transaction]] = {
-            switch selectedPeriod {
-            case .daily:
-                return Dictionary(grouping: allTransactions) { calendar.startOfDay(for: $0.transactionDate) }
-            case .monthly:
-                return Dictionary(grouping: allTransactions) {
-                    let comps = calendar.dateComponents([.year, .month], from: $0.transactionDate)
-                    return calendar.date(from: comps)!
-                }
-            }
-        }()
-
-        var results: [BalanceBar] = []
-
-        switch selectedPeriod {
-        case .daily:
-            for offset in (0..<30).reversed() {
-                let day = calendar.date(byAdding: .day, value: -offset, to: today)!
-                let dayTransactions = grouped[day] ?? []
-
-                var dailyTotal: Decimal = 0
-                for transaction in dayTransactions {
-                    if let category = allCategories.first(where: { $0.id == transaction.categoryId }) {
-                        switch category.direction {
-                        case .income: dailyTotal += transaction.amount
-                        case .outcome: dailyTotal -= transaction.amount
-                        }
-                    }
-                }
-
-                results.append(BalanceBar(date: day, balance: dailyTotal))
-            }
-
-        case .monthly:
-            let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: today))!
-            for offset in (0..<24).reversed() {
-                let month = calendar.date(byAdding: .month, value: -offset, to: monthStart)!
-                let monthTransactions = grouped[month] ?? []
-
-                var monthlyTotal: Decimal = 0
-                for transaction in monthTransactions {
-                    if let category = allCategories.first(where: { $0.id == transaction.categoryId }) {
-                        switch category.direction {
-                        case .income: monthlyTotal += transaction.amount
-                        case .outcome: monthlyTotal -= transaction.amount
-                        }
-                    }
-                }
-
-                results.append(BalanceBar(date: month, balance: monthlyTotal))
-            }
-        }
-        
-        withAnimation(.easeInOut(duration: 0.5)) {
-            self.balances = results
-        }
-    }
 }
