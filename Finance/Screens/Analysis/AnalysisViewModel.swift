@@ -6,6 +6,7 @@
 //
 import Foundation
 import PieChart
+import Combine
 
 @MainActor
 final class AnalysisViewModel: ObservableObject {
@@ -26,6 +27,9 @@ final class AnalysisViewModel: ObservableObject {
     @Published var sortType: SortType = .date
     @Published var from: Date
     @Published var to: Date
+    @Published private(set) var chartEntities: [Entity] = []
+
+    private var lastTransactionIds: Set<Int> = []
 
     let transactionService: TransactionsService
     let categoriesService: CategoriesService
@@ -109,6 +113,8 @@ final class AnalysisViewModel: ObservableObject {
                         newTotal += transaction.amount
                     }
                 }
+                
+                let newTransactionIds = Set(newItems.map { $0.0.id })
 
                 if let currency = Currency(rawValue: bankAccount.currency) {
                     self.сurrencySymbol = currency.symbol
@@ -117,6 +123,10 @@ final class AnalysisViewModel: ObservableObject {
                 self.items = newItems
                 self.total = newTotal
                 self.sortItems()
+                if newTransactionIds != lastTransactionIds {
+                    self.chartEntities = self.buildChartEntities(from: newItems)
+                    self.lastTransactionIds = newTransactionIds
+                }
             } catch is CancellationError {
                 print("Вышел с экрана, задача отменилась")
             } catch {
@@ -143,20 +153,29 @@ final class AnalysisViewModel: ObservableObject {
         }
     }
     
-    func pieChartEntities() -> [Entity] {
-        guard total > 0 else { return [] }
-        
-        var categorySums: [String: Decimal] = [:]
-        
-        for (transaction, category) in items {
-            categorySums[category.name] = (categorySums[category.name] ?? 0) + transaction.amount
+    private func buildChartEntities(from items: [(Transaction, Category)]) -> [Entity] {
+        let grouped = Dictionary(grouping: items, by: { $0.1.name })
+        let entries: [(label: String, value: Decimal)] = grouped.map { key, group in
+            let sum = group.map { $0.0.amount }.reduce(0, +)
+            return (label: key, value: sum)
         }
-        
-        return categorySums.map { name, sum in
-            let percentage = (sum / total) * 100
-            let roundedPercentage = percentage.rounded(toPlaces: 1)
-            return Entity(value: roundedPercentage, label: name)
-        }.sorted { $0.value > $1.value }
+
+        let total = entries.map { $0.value }.reduce(0, +)
+        guard total > 0 else { return [] }
+
+        let numberFormatter = NumberFormatter()
+        numberFormatter.numberStyle = .decimal
+        numberFormatter.maximumFractionDigits = 1
+        numberFormatter.minimumFractionDigits = 1
+        numberFormatter.roundingMode = .halfUp
+
+        return entries
+            .map { entry in
+                let percentage = (entry.value / total * 100 as NSDecimalNumber)
+                let roundedPercentage = numberFormatter.string(from: percentage) ?? "0.0"
+                return Entity(value: Decimal(string: roundedPercentage) ?? 0, label: entry.label)
+            }
+            .sorted { $0.value > $1.value }
     }
 }
 

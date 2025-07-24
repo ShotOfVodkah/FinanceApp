@@ -92,7 +92,8 @@ public final class PieChartView: UIView {
             )
             
             path.lineWidth = lineWidth
-            PieChart.segmentColors[safe: index]?.setStroke()
+            let color = index < PieChart.segmentColors.count ? PieChart.segmentColors[index] : UIColor.lightGray
+            color.setStroke()
             path.stroke()
             
             startAngle = endAngle
@@ -114,7 +115,7 @@ public final class PieChartView: UIView {
         var yOffset = center.y - totalHeight / 2
 
         for (index, entity) in entities.enumerated() {
-            let color = PieChart.segmentColors[safe: index] ?? .black
+            let color = index < PieChart.segmentColors.count ? PieChart.segmentColors[index] : UIColor.lightGray
 
             let circleRect = CGRect(
                 x: center.x - maxLegendWidth/2,
@@ -151,32 +152,57 @@ public final class PieChartView: UIView {
     private func animateTransition(to newEntities: [Entity]) {
         guard !isAnimating else { return }
         isAnimating = true
-
-        let halfTurn = CGAffineTransform(rotationAngle: .pi)
-
-        UIView.animate(withDuration: 0.4, animations: {
-            self.transform = halfTurn
-            self.alpha = 0
-        }, completion: { _ in
+        let rotateOut = CABasicAnimation(keyPath: "transform.rotation.z")
+        rotateOut.fromValue = 0
+        rotateOut.toValue = CGFloat.pi
+        rotateOut.duration = 0.4
+        rotateOut.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            
+        let fadeOut = CABasicAnimation(keyPath: "opacity")
+        fadeOut.fromValue = 1
+        fadeOut.toValue = 0
+        fadeOut.duration = 0.4
+        fadeOut.timingFunction = CAMediaTimingFunction(name: .easeIn)
+        
+        let outAnimationGroup = CAAnimationGroup()
+        outAnimationGroup.animations = [rotateOut, fadeOut]
+        outAnimationGroup.duration = 0.4
+        outAnimationGroup.isRemovedOnCompletion = false
+        outAnimationGroup.fillMode = .forwards
+        
+        layer.add(outAnimationGroup, forKey: "outAnimation")
+            
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            guard let self = self else { return }
+            
             self.entities = newEntities
             self.setNeedsDisplay()
-
-            self.transform = CGAffineTransform(rotationAngle: -.pi)
-            self.alpha = 0
-
-            UIView.animate(withDuration: 0.4, animations: {
-                self.transform = .identity
-                self.alpha = 1
-            }, completion: { _ in
+                
+            self.layer.removeAnimation(forKey: "outAnimation")
+                
+            let rotateIn = CABasicAnimation(keyPath: "transform.rotation.z")
+            rotateIn.fromValue = CGFloat.pi
+            rotateIn.toValue = 2 * CGFloat.pi
+            rotateIn.duration = 0.4
+            rotateIn.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                
+            let fadeIn = CABasicAnimation(keyPath: "opacity")
+            fadeIn.fromValue = 0
+            fadeIn.toValue = 1
+            fadeIn.duration = 0.4
+            fadeIn.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                
+            let inAnimationGroup = CAAnimationGroup()
+            inAnimationGroup.animations = [rotateIn, fadeIn]
+            inAnimationGroup.duration = 0.4
+                
+            self.layer.add(inAnimationGroup, forKey: "inAnimation")
+                
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                 self.isAnimating = false
-            })
-        })
+            }
+        }
     }
 }
 
-private extension Array {
-    subscript(safe index: Index) -> Element? {
-        indices.contains(index) ? self[index] : nil
-    }
-}
 
