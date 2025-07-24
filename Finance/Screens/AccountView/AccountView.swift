@@ -40,7 +40,8 @@ struct AccountView: View {
                                     } else {
                                         balanceView(account: account)
                                         currencyView()
-                                        balanceChart(balances: viewModel.balances)
+                                        pickerView()
+                                        balanceChart(balances: viewModel.balances, period: viewModel.selectedPeriod)
                                     }
                                 }
                             }
@@ -127,6 +128,26 @@ struct AccountView: View {
         .background(Color.accentColor.opacity(0.2))
         .clipShape(RoundedRectangle(cornerRadius: 15))
     }
+    
+    private func pickerView() -> some View {
+        HStack {
+            Text("Период")
+            Spacer()
+            Picker("", selection: $viewModel.selectedPeriod) {
+                ForEach(AccountViewModel.StatisticsPeriod.allCases) { period in
+                    Text(period.rawValue).tag(period)
+                }
+            }
+            .pickerStyle(DefaultPickerStyle())
+            .onChange(of: viewModel.selectedPeriod) { _ in
+                Task {await viewModel.reloadBalances()}
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 10)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 15))
+    }
 
     private func balanceEdit(account: BankAccount) -> some View {
         VStack {
@@ -190,31 +211,103 @@ struct AccountView: View {
             .clipShape(RoundedRectangle(cornerRadius: 15))
         }
     }
-    
+
     @ViewBuilder
-    private func balanceChart(balances: [BalanceBar]) -> some View {
+    private func balanceChart(balances: [BalanceBar], period: AccountViewModel.StatisticsPeriod) -> some View {
         Chart {
             ForEach(balances) { entry in
+                let balanceDouble = abs((entry.balance as NSDecimalNumber).doubleValue)
+                let barHeight = entry.balance == 0 ? 50.0 : balanceDouble
+                let barColor: Color = {
+                    if entry.balance == 0 {
+                        return Color.gray.opacity(0.7)
+                    } else {
+                        return entry.balance > 0 ? .green : .red
+                    }
+                }()
+
                 BarMark(
-                    x: .value("Date", entry.date, unit: .day),
-                    y: .value("Balance", entry.balance == 0 ? 50 : abs((entry.balance as NSDecimalNumber).doubleValue))
+                    x: .value("Date", entry.date, unit: period == .daily ? .day : .month),
+                    y: .value("Balance", barHeight)
                 )
-                .foregroundStyle(entry.balance == 0
-                                 ? Color.gray.opacity(0.4)
-                                 : (entry.balance > 0 ? Color.green : Color.red))
+                .foregroundStyle(barColor)
                 .cornerRadius(10)
+                
             }
         }
         .chartYAxis(.hidden)
         .chartXAxis {
-            AxisMarks(values: .stride(by: .day, count: 7)) { value in
-                AxisValueLabel(format: .dateTime.day().month(.twoDigits), centered: true)
+            if period == .daily {
+                AxisMarks(values: .stride(by: .day, count: 7)) { value in
+                    AxisValueLabel(format: .dateTime.day().month(.twoDigits), centered: true)
+                }
+            } else {
+                AxisMarks(values: .stride(by: .month, count: 3)) { value in
+                    AxisValueLabel(format: .dateTime.month(.abbreviated).year(.twoDigits), centered: true)
+                }
+            }
+        }
+        .chartOverlay { proxy in
+            GeometryReader { geometry in
+                Rectangle()
+                    .fill(Color.clear)
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                let locationX = value.location.x - geometry[proxy.plotAreaFrame].origin.x
+                                if let date: Date = proxy.value(atX: locationX) {
+                                    let calendar = Calendar.current
+                                    let matchedEntry: BalanceBar?
+                                    switch period {
+                                    case .daily:
+                                        matchedEntry = balances.first { calendar.isDate($0.date, inSameDayAs: date) }
+                                    case .monthly:
+                                        matchedEntry = balances.first {
+                                            calendar.component(.year, from: $0.date) == calendar.component(.year, from: date) &&
+                                            calendar.component(.month, from: $0.date) == calendar.component(.month, from: date)
+                                        }
+                                    }
+                                    if let entry = matchedEntry {
+                                        withAnimation(.linear(duration: 0.3)) {
+                                            viewModel.selectedEntry = entry
+                                        }
+                                    }
+                                }
+                            }
+                            .onEnded { _ in
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                                    withAnimation(.linear(duration: 0.3)) {
+                                        viewModel.selectedEntry = nil
+                                    }
+                                }
+                            }
+                    )
+                    .overlay {
+                        if let selectedEntry = viewModel.selectedEntry,
+                           let xPosition = proxy.position(forX: selectedEntry.date) {
+                            let barColor: Color = selectedEntry.balance == 0 ? .gray : (selectedEntry.balance > 0 ? .green : .red)
+
+                            Text("\(selectedEntry.balance, format: .number) \(viewModel.currency)")
+                                .font(.caption)
+                                .padding(6)
+                                .background(barColor)
+                                .cornerRadius(6)
+                                .foregroundColor(.white)
+                                .position(
+                                    x: xPosition + geometry[proxy.plotAreaFrame].origin.x,
+                                    y: geometry[proxy.plotAreaFrame].origin.y)
+                                .transition(.scale.combined(with: .opacity))
+                                .animation(.easeInOut(duration: 0.3), value: viewModel.selectedEntry?.id)
+                        }
+                    }
             }
         }
         .frame(height: 200)
         .padding(.vertical)
         .background(Color(.systemGray6))
-        .clipShape(RoundedRectangle(cornerRadius: 15))
+        .id(period)
+        .transition(.opacity)
     }
 }
 
