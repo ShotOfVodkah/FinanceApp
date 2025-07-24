@@ -7,7 +7,6 @@
 
 import SwiftUI
 import SwiftData
-import PieChart
 
 struct ContentView: View {
     @State var selectedTab = 0
@@ -20,7 +19,6 @@ struct ContentView: View {
 
     
     init() {
-        PieChart.draw()
         self.networkClient = NetworkClient(
             baseURL: "https://shmr-finance.ru/api/v1/",
             token: "TmtbkBpyxXtgzPQCbLMvUnCD"

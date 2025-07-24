@@ -5,6 +5,7 @@
 //  Created by Stepan Polyakov on 08.07.2025.
 //
 import Foundation
+import PieChart
 
 @MainActor
 final class AnalysisViewModel: ObservableObject {
@@ -140,5 +141,30 @@ final class AnalysisViewModel: ObservableObject {
         case .amount:
             items.sort { $0.0.amount > $1.0.amount }
         }
+    }
+    
+    func pieChartEntities() -> [Entity] {
+        guard total > 0 else { return [] }
+        
+        var categorySums: [String: Decimal] = [:]
+        
+        for (transaction, category) in items {
+            categorySums[category.name] = (categorySums[category.name] ?? 0) + transaction.amount
+        }
+        
+        return categorySums.map { name, sum in
+            let percentage = (sum / total) * 100
+            let roundedPercentage = percentage.rounded(toPlaces: 1)
+            return Entity(value: roundedPercentage, label: name)
+        }.sorted { $0.value > $1.value }
+    }
+}
+
+extension Decimal {
+    func rounded(toPlaces places: Int) -> Decimal {
+        var result = Decimal()
+        var localCopy = self
+        NSDecimalRound(&result, &localCopy, places, .plain)
+        return result
     }
 }
