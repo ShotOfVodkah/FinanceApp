@@ -6,17 +6,22 @@
 //
 
 import SwiftUI
+import Charts
 
 struct AccountView: View {
     @State private var isEditing: Bool = false
     @State private var showCurrency = false
     @State private var showTextField = false
     @State private var deviceShaken = false
+    @State private var selectedEntry: BalanceBar?
+    private func isSelected(_ entry: BalanceBar) -> Bool {
+        selectedEntry?.id == entry.id
+    }
 
     @StateObject private var viewModel: AccountViewModel
 
-    init(bankAccountModel: BankAccountsService) {
-        _viewModel = StateObject(wrappedValue: AccountViewModel(bankAccountService: bankAccountModel))
+    init(bankAccountModel: BankAccountsService, transactionService: TransactionsService, categoriesService: CategoriesService) {
+        _viewModel = StateObject(wrappedValue: AccountViewModel(bankAccountService: bankAccountModel, transactionService: transactionService, categoriesService: categoriesService))
     }
 
     var body: some View {
@@ -39,6 +44,8 @@ struct AccountView: View {
                                     } else {
                                         balanceView(account: account)
                                         currencyView()
+                                        pickerView()
+                                        balanceChart(balances: viewModel.currentBalances, period: viewModel.selectedPeriod)
                                     }
                                 }
                             }
@@ -125,6 +132,23 @@ struct AccountView: View {
         .background(Color.accentColor.opacity(0.2))
         .clipShape(RoundedRectangle(cornerRadius: 15))
     }
+    
+    private func pickerView() -> some View {
+        HStack {
+            Text("Период")
+            Spacer()
+            Picker("", selection: $viewModel.selectedPeriod) {
+                ForEach(AccountViewModel.StatisticsPeriod.allCases) { period in
+                    Text(period.rawValue).tag(period)
+                }
+            }
+            .pickerStyle(DefaultPickerStyle())
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 10)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 15))
+    }
 
     private func balanceEdit(account: BankAccount) -> some View {
         VStack {
@@ -187,6 +211,78 @@ struct AccountView: View {
             .background(Color.white)
             .clipShape(RoundedRectangle(cornerRadius: 15))
         }
+    }
+
+    @ViewBuilder
+    private func balanceChart(balances: [BalanceBar], period: AccountViewModel.StatisticsPeriod) -> some View {
+        Chart {
+            ForEach(balances) { entry in
+                let amount = abs((entry.balance as NSDecimalNumber).doubleValue)
+                let height = entry.balance == 0 ? 50.0 : amount
+                let color: Color = entry.balance == 0 ? .gray.opacity(0.7) :
+                                  (entry.balance > 0 ? .green : .red)
+
+                BarMark(
+                    x: .value("Date", entry.date, unit: period == .daily ? .day : .month),
+                    y: .value("Balance", height)
+                )
+                .foregroundStyle(color)
+                .cornerRadius(10)
+            }
+        }
+        .chartYAxis(.hidden)
+        .chartXAxis {
+            if period == .daily {
+                AxisMarks(values: .stride(by: .day, count: 7)) { value in
+                    AxisValueLabel(format: .dateTime.day().month(.twoDigits), centered: true)
+                }
+            } else {
+                AxisMarks(values: .stride(by: .month, count: 3)) { value in
+                    AxisValueLabel(format: .dateTime.month(.abbreviated).year(.twoDigits), centered: true)
+                }
+            }
+        }
+        .chartOverlay { proxy in
+            GeometryReader { geometry in
+                Rectangle().fill(.clear).contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                let location = value.location.x - geometry[proxy.plotAreaFrame].origin.x
+                                if let date: Date = proxy.value(atX: location) {
+                                    selectedEntry = balances.min {
+                                        abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date))
+                                    }
+                                }
+                            }
+                            .onEnded { _ in
+                                withAnimation(.easeOut(duration: 0.3)) {
+                                    selectedEntry = nil
+                                }
+                            }
+                    )
+                if let selected = selectedEntry,
+                    let xPosition = proxy.position(forX: selected.date) {
+                    let color: Color = selected.balance == 0 ? .gray.opacity(0.7) :
+                                        (selected.balance > 0 ? .green : .red)
+                    Text("\(selected.balance, format: .number) \(viewModel.currency)")
+                        .font(.caption2)
+                        .padding(4)
+                        .background(color)
+                        .cornerRadius(4)
+                        .foregroundColor(.white)
+                        .position(
+                            x: xPosition + geometry[proxy.plotAreaFrame].origin.x,
+                            y: geometry[proxy.plotAreaFrame].minY - 10
+                        )
+                        .transition(.opacity)
+                }
+            }
+        }
+        .frame(height: 200)
+        .padding(.vertical)
+        .background(Color(.systemGray6))
+        .animation(.spring(response: 0.5, dampingFraction: 0.7), value: viewModel.selectedPeriod)
     }
 }
 

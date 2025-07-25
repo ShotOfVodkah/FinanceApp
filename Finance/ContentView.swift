@@ -17,6 +17,7 @@ struct ContentView: View {
     let transactionsService: TransactionsService
     @State private var modelContainer: ModelContainer
 
+    
     init() {
         self.networkClient = NetworkClient(
             baseURL: "https://shmr-finance.ru/api/v1/",
@@ -66,7 +67,7 @@ struct ContentView: View {
                         .renderingMode(.template)
                 }
                 .tag(1)
-            AccountView(bankAccountModel: bankAccountService)
+            AccountView(bankAccountModel: bankAccountService, transactionService: transactionsService, categoriesService: categoriesService)
                 .tabItem{
                     Text("Счет")
                     Image("icon_account")

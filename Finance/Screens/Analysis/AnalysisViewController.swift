@@ -7,55 +7,52 @@
 import UIKit
 import SwiftUI
 import Combine
+import PieChart
 
 class AnalysisViewController: UIViewController, UITableViewDataSource, UITableViewDelegate, UIAdaptivePresentationControllerDelegate {
-    
+
     private var viewModel: AnalysisViewModel!
     private let tableView = UITableView(frame: .zero, style: .insetGrouped)
     private let fromDatePicker = UIDatePicker()
     private let toDatePicker = UIDatePicker()
-    private let totalLabel = UILabel()
     private var cancellables = Set<AnyCancellable>()
-    
+    private let pieChartView = PieChartView()
+
+    private var previousChartEntities: [Entity] = []
+
     private lazy var sortControl: UISegmentedControl = {
         let control = UISegmentedControl(items: AnalysisViewModel.SortType.allCases.map { $0.rawValue })
         control.selectedSegmentIndex = 0
         control.addTarget(self, action: #selector(sortChanged), for: .valueChanged)
         return control
     }()
-    
+
     private let loadingIndicator: UIActivityIndicatorView = {
         let indicator = UIActivityIndicatorView(style: .large)
         indicator.hidesWhenStopped = true
         indicator.translatesAutoresizingMaskIntoConstraints = false
         return indicator
     }()
-    
+
     init(viewModel: AnalysisViewModel) {
         self.viewModel = viewModel
         super.init(nibName: nil, bundle: nil)
     }
-    
+
     required init?(coder: NSCoder) {
         fatalError("")
     }
-    
+
     deinit {
         NotificationCenter.default.removeObserver(self)
     }
-    
+
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
         setupBindings()
         loadData()
-//
-//        view.addSubview(loadingIndicator)
-//        NSLayoutConstraint.activate([
-//            loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-//            loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
-//        ])
-        
+
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleTransactionChange),
@@ -63,70 +60,70 @@ class AnalysisViewController: UIViewController, UITableViewDataSource, UITableVi
             object: nil
         )
     }
-    
+
     private func setupUI() {
         view.backgroundColor = .systemGray6
         setupDatePickers()
-        setupTotalLabel()
+        setupPieChartView()
         setupTableView()
-        
+
         view.addSubview(loadingIndicator)
         NSLayoutConstraint.activate([
             loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
     }
-    
+
+    private func setupPieChartView() {
+        pieChartView.translatesAutoresizingMaskIntoConstraints = false
+        pieChartView.heightAnchor.constraint(equalToConstant: 230).isActive = true
+    }
+
     private func setupDatePickers() {
         [fromDatePicker, toDatePicker].forEach {
             $0.datePickerMode = .date
             $0.maximumDate = Date()
             $0.preferredDatePickerStyle = .compact
         }
-        
+
         fromDatePicker.date = viewModel.from
         toDatePicker.date = viewModel.to
-        
+
         fromDatePicker.addTarget(self, action: #selector(fromDateChanged), for: .valueChanged)
         toDatePicker.addTarget(self, action: #selector(toDateChanged), for: .valueChanged)
     }
-    
-    private func setupTotalLabel() {
-        totalLabel.textAlignment = .right
-        totalLabel.font = UIFont.systemFont(ofSize: 16, weight: .medium)
-        totalLabel.textColor = .label
-    }
-    
+
     private func setupTableView() {
         tableView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(tableView)
-        
+
         tableView.dataSource = self
         tableView.delegate = self
         tableView.separatorStyle = .singleLine
         tableView.rowHeight = UITableView.automaticDimension
         tableView.register(TransactionTableViewCell.self, forCellReuseIdentifier: "TransactionCell")
         tableView.register(AnalysisTopRow.self, forCellReuseIdentifier: "FilterCell")
+        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "ChartCell")
         tableView.backgroundColor = .systemGray6
-        
+
         let titleLabel = UILabel()
         titleLabel.text = "Анализ"
         titleLabel.font = UIFont.systemFont(ofSize: 36, weight: .bold)
-        
+
         let headerView = UIView()
         headerView.addSubview(titleLabel)
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        
+
         NSLayoutConstraint.activate([
             titleLabel.topAnchor.constraint(equalTo: headerView.topAnchor, constant: 16),
             titleLabel.leadingAnchor.constraint(equalTo: headerView.leadingAnchor, constant: 16),
             titleLabel.trailingAnchor.constraint(equalTo: headerView.trailingAnchor, constant: -16),
             titleLabel.bottomAnchor.constraint(equalTo: headerView.bottomAnchor, constant: -8)
         ])
-        
+
         tableView.tableHeaderView = headerView
         headerView.frame = CGRect(x: 0, y: 0, width: view.bounds.width, height: 60)
-        
+
         NSLayoutConstraint.activate([
             tableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -134,35 +131,51 @@ class AnalysisViewController: UIViewController, UITableViewDataSource, UITableVi
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
     }
-    
+
     private func setupBindings() {
         viewModel.onDatesUpdated = { [weak self] in
             self?.fromDatePicker.date = self?.viewModel.from ?? Date()
             self?.toDatePicker.date = self?.viewModel.to ?? Date()
         }
-        
+
+        viewModel.$chartEntities
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newEntities in
+                guard let self = self else { return }
+                guard !newEntities.isEmpty else { return }
+                guard newEntities != self.previousChartEntities else { return }
+
+                self.pieChartView.setEntities(newEntities, animated: true)
+                self.previousChartEntities = newEntities
+                self.tableView.reloadData()
+            }
+            .store(in: &cancellables)
+
         viewModel.$isLoading
             .receive(on: DispatchQueue.main)
             .sink { [weak self] isLoading in
                 isLoading ? self?.loadingIndicator.startAnimating() : self?.loadingIndicator.stopAnimating()
             }
             .store(in: &cancellables)
-        
+
         viewModel.$items
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.tableView.reloadData()
             }
             .store(in: &cancellables)
-        
+
         viewModel.$total
             .combineLatest(viewModel.$сurrencySymbol)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] total, symbol in
-                self?.totalLabel.text = "\(total) \(symbol)"
+                let indexPath = IndexPath(row: 3, section: 0)
+                if let cell = self?.tableView.cellForRow(at: indexPath) as? AnalysisTopRow {
+                    cell.configure(title: "Сумма", value: "\(total) \(symbol)")
+                }
             }
             .store(in: &cancellables)
-        
+
         viewModel.$error
             .compactMap { $0 }
             .receive(on: DispatchQueue.main)
@@ -171,31 +184,27 @@ class AnalysisViewController: UIViewController, UITableViewDataSource, UITableVi
             }
             .store(in: &cancellables)
     }
-    
+
     @objc private func fromDateChanged() {
         viewModel.updateFromDate(fromDatePicker.date)
     }
-    
+
     @objc private func toDateChanged() {
         viewModel.updateToDate(toDatePicker.date)
     }
-    
+
     @objc private func sortChanged() {
         viewModel.updateSortType(index: sortControl.selectedSegmentIndex)
     }
-    
+
     @objc private func handleTransactionChange() {
         loadData()
     }
-    
+
     private func loadData() {
         viewModel.loadData()
     }
-    
-//    private func updateTotalLabel() {
-//        totalLabel.text = "\(viewModel.total) \(viewModel.сurrencySymbol)"
-//    }
-    
+
     private func showErrorAlert(_ message: String) {
         let alert = UIAlertController(
             title: "Ошибка",
@@ -207,32 +216,53 @@ class AnalysisViewController: UIViewController, UITableViewDataSource, UITableVi
         }))
         present(alert, animated: true)
     }
-    
+
     func numberOfSections(in tableView: UITableView) -> Int {
-        return 2
+        return 3
     }
-    
+
     func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        return section == 1 ? "ОПЕРАЦИИ" : nil
+        return section == 2 ? "ОПЕРАЦИИ" : nil
     }
-    
+
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return section == 0 ? 4 : viewModel.items.count
+        switch section {
+        case 0: return 4
+        case 1: return 1
+        case 2: return viewModel.items.count
+        default: return 0
+        }
     }
-    
+
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        if indexPath.section == 0 {
+        switch indexPath.section {
+        case 0:
             let cell = tableView.dequeueReusableCell(withIdentifier: "FilterCell", for: indexPath) as! AnalysisTopRow
-            
             switch indexPath.row {
             case 0: cell.configure(title: "Начало", control: fromDatePicker)
             case 1: cell.configure(title: "Конец", control: toDatePicker)
             case 2: cell.configure(title: "Сортировка", control: sortControl)
-            case 3: cell.configure(title: "Сумма", value: totalLabel.text ?? "")
+            case 3: cell.configure(title: "Сумма", value: "\(viewModel.total) \(viewModel.сurrencySymbol)")
             default: break
             }
             return cell
-        } else {
+        case 1:
+            let cell = tableView.dequeueReusableCell(withIdentifier: "ChartCell", for: indexPath)
+            if cell.contentView.subviews.isEmpty {
+                cell.contentView.addSubview(pieChartView)
+                NSLayoutConstraint.activate([
+                    pieChartView.topAnchor.constraint(equalTo: cell.contentView.topAnchor),
+                    pieChartView.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor),
+                    pieChartView.leadingAnchor.constraint(equalTo: cell.contentView.leadingAnchor),
+                    pieChartView.trailingAnchor.constraint(equalTo: cell.contentView.trailingAnchor)
+                ])
+            }
+            cell.selectionStyle = .none
+            cell.backgroundColor = .clear
+            cell.backgroundView = UIView()
+            cell.backgroundView?.backgroundColor = .clear
+            return cell
+        case 2:
             let cell = tableView.dequeueReusableCell(withIdentifier: "TransactionCell", for: indexPath) as! TransactionTableViewCell
             let (transaction, category) = viewModel.items[indexPath.row]
             cell.configure(
@@ -243,18 +273,20 @@ class AnalysisViewController: UIViewController, UITableViewDataSource, UITableVi
             )
             cell.selectionStyle = .none
             return cell
+        default:
+            return UITableViewCell()
         }
     }
-    
+
     func tableView(_ tableView: UITableView, shouldHighlightRowAt indexPath: IndexPath) -> Bool {
-        return indexPath.section != 0
+        return indexPath.section == 2
     }
-    
+
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        guard indexPath.section == 1 else { return }
-        
+        guard indexPath.section == 2 else { return }
+
         let transaction = viewModel.items[indexPath.row]
-        
+
         let editDeleteView = EditDeleteView(
             transactionsService: viewModel.transactionService,
             categoriesService: viewModel.categoriesService,
@@ -262,14 +294,14 @@ class AnalysisViewController: UIViewController, UITableViewDataSource, UITableVi
             bankAccountService: viewModel.bankAccountsService,
             selectedTransaction: transaction
         )
-        
+
         let hostingController = UIHostingController(rootView: editDeleteView)
         hostingController.modalPresentationStyle = .fullScreen
         hostingController.modalTransitionStyle = .coverVertical
         hostingController.presentationController?.delegate = self
         present(hostingController, animated: true)
     }
-    
+
     func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
         viewModel.loadData()
     }
@@ -278,5 +310,4 @@ class AnalysisViewController: UIViewController, UITableViewDataSource, UITableVi
 extension Notification.Name {
     static let transactionDidChange = Notification.Name("TransactionDidChangeNotification")
 }
-
 
