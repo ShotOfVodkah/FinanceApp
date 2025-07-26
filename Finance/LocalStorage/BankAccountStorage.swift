@@ -7,6 +7,8 @@
 
 import SwiftData
 import Foundation
+
+@MainActor
 final class SwiftDataAccountStorage: AccountStorageProtocol {
     private let modelContext: ModelContext
     
